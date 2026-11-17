@@ -1,0 +1,40 @@
+{
+    "expo":  {
+                 "name":  "Crystal Bullion",
+                 "slug":  "crystal-bullion",
+                 "version":  "1.0.0",
+                 "orientation":  "portrait",
+                 "icon":  "./assets/images/crystal_app_icon.png",
+                 "scheme":  "crystalbullion",
+                 "userInterfaceStyle":  "dark",
+                 "ios":  {
+                             "supportsTablet":  true
+                         },
+                 "android":  {
+                                 "adaptiveIcon":  {
+                                                      "backgroundColor":  "#0B3D34",
+                                                      "foregroundImage":  "./assets/images/crystal_app_icon.png"
+                                                  },
+                                 "predictiveBackGestureEnabled":  false
+                             },
+                 "web":  {
+                             "bundler":  "metro",
+                             "output":  "single",
+                             "favicon":  "./assets/images/crystal_icon_gold.png"
+                         },
+                 "plugins":  [
+                                 "expo-router",
+                                 [
+                                     "expo-splash-screen",
+                                     {
+                                         "image":  "./assets/images/crystal_logo_white.png",
+                                         "resizeMode":  "contain",
+                                         "backgroundColor":  "#0B3D34"
+                                     }
+                                 ]
+                             ],
+                 "experiments":  {
+                                     "typedRoutes":  true
+                                 }
+             }
+}
