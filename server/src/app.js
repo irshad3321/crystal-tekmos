@@ -5,6 +5,7 @@ import priceRoutes from './routes/priceRoutes.js';
 import priceHistoryRoutes from './routes/priceHistoryRoutes.js';
 import calculatorRoutes from './routes/calculatorRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
@@ -18,6 +19,7 @@ app.use('/api/prices/history', priceHistoryRoutes);
 app.use('/api/prices', priceRoutes);
 app.use('/api/calculator', calculatorRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

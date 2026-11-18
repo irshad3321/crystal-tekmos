@@ -123,7 +123,7 @@ export default function DashboardScreen() {
           <Text style={styles.footerNote}>Indicative UI samples. No live market connection.</Text>
         </View>
       </ScrollView>
-      <Pressable style={styles.aiLaunch} onPress={() => router.push('/ai-assistant')} accessibilityRole="button" accessibilityLabel={locale.isRTL ? 'افتح مساعد كريستال AI' : 'Open Crystal AI assistant'}>
+      <Pressable style={styles.aiLaunch} onPress={() => router.push('/ai-assistant')} accessibilityRole="button" accessibilityLabel={locale.isRTL ? 'افتح مساعد غولدي' : 'Open Goldyy assistant'}>
         <Image source={require('../../assets/images/crystal_icon_gold.png')} style={styles.aiLaunchIcon} resizeMode="contain" />
         <Text style={styles.aiLaunchText}>AI</Text>
       </Pressable>
