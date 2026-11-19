@@ -1,0 +1,11 @@
+import { COPY } from '@/constants/copy';
+export const welcomeMessage = COPY.GOLDYY_WELCOME;
+
+export const quickActions = [
+  { label: COPY.CALCULATE_GOLD_PRICE, prompt: COPY.HOW_CAN_I_CALCULATE_A_GOLD_PRICE },
+  { label: COPY.CALCULATE_SILVER_PRICE, prompt: COPY.HOW_CAN_I_CALCULATE_A_SILVER_PRICE },
+  { label: COPY.COMPARE_GOLD_PURITIES, prompt: COPY.COMPARE_GOLD_PURITY_PROMPT },
+  { label: COPY.EXPLAIN_PRICE_CHANGES, prompt: COPY.HOW_SHOULD_I_READ_THE_PRICE_GRAPH },
+  { label: COPY.SET_PRICE_ALERT, prompt: COPY.HOW_DO_I_SET_A_PRICE_ALERT },
+  { label: COPY.HELP_ME_USE_CRYSTAL, prompt: COPY.WHAT_CAN_I_DO_IN_THE_CRYSTAL_APP },
+] as const;

@@ -1,3 +1,5 @@
+import messages from '../constants/messages.js';
+
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 20;
 const requests = new Map();
@@ -12,7 +14,7 @@ function aiRateLimit(req, res, next) {
   }
   const entry = requests.get(key);
   if (!entry && requests.size >= 1000) {
-    const error = new Error('Goldyy is busy. Please try again shortly.');
+    const error = new Error(messages.error.AI_RATE_LIMIT_BUSY);
     error.statusCode = 429;
     return next(error);
   }
@@ -21,7 +23,7 @@ function aiRateLimit(req, res, next) {
   requests.set(key, current);
   if (current.count > MAX_REQUESTS) {
     res.set('Retry-After', String(Math.ceil((current.resetAt - now) / 1000)));
-    const error = new Error('Too many Goldyy requests. Please try again shortly.');
+    const error = new Error(messages.error.AI_RATE_LIMIT_EXCEEDED);
     error.statusCode = 429;
     return next(error);
   }

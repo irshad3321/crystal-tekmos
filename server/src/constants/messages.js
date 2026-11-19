@@ -28,6 +28,52 @@ const messages = Object.freeze({
     ALERT_NOT_FOUND: 'Alert not found',
     DATABASE_UNAVAILABLE: 'Alert storage is unavailable',
     INTERNAL_SERVER_ERROR: 'Internal server error',
+    MISSING_MONGO_URI: 'MONGO_URI is missing. Set it in server/.env.',
+    AI_RATE_LIMIT_BUSY: 'Goldyy is busy. Please try again shortly.',
+    AI_RATE_LIMIT_EXCEEDED: 'Too many Goldyy requests. Please try again shortly.',
+    AI_REQUEST_BODY_REQUIRED: 'Request body must be an object.',
+    AI_UNSUPPORTED_REQUEST_FIELDS: 'Request contains unsupported fields.',
+    AI_MESSAGE_REQUIRED: 'Message must be a non-empty string.',
+    AI_MESSAGE_TOO_LONG: (limit) => `Message must be ${limit} characters or fewer.`,
+    AI_CONTEXT_REQUIRED: 'Context must be an object.',
+    AI_UNSUPPORTED_CONTEXT_FIELDS: 'Context contains unsupported fields.',
+    AI_HISTORY_INVALID: 'Context history is invalid.',
+    AI_PURITY_REQUIRES_METAL: 'Context purity requires a metal and an integer fineness.',
+    AI_UNSUPPORTED_CONTEXT_PURITY: 'Unsupported context purity for this metal.',
+    AI_NOT_CONFIGURED: 'Goldyy is not configured on the server.',
+    AI_CREDENTIALS_UNAVAILABLE: 'Goldyy credentials are unavailable. Please contact support.',
+    AI_COULD_NOT_ANSWER: 'Goldyy could not answer right now. Please try again.',
+    AI_TIMEOUT: 'Goldyy took too long to respond. Please try again.',
+    AI_UNREADABLE_RESPONSE: 'Goldyy returned an unreadable response.',
+    AI_TEMPORARILY_UNAVAILABLE: 'Goldyy is temporarily unavailable. Please try again.',
+    AI_NO_ANSWER: 'Goldyy returned no answer. Please try again.',
+    INVALID_SPOT_RESPONSE: 'Invalid spot response',
+    UNEXPECTED_GOLD_KARAT: 'Unexpected gold karat',
+    INCONSISTENT_SPOT_UNITS: 'Inconsistent spot units',
+    PROVIDER_HTTP: (status) => `Provider HTTP ${status}`,
+    MISSING_MOCK_PRICE: (metal, purity) => `Missing mock price for ${metal} ${purity}`,
+  }),
+  log: Object.freeze({
+    DATABASE_CONNECTED: 'MongoDB connected',
+    ALERTS_DISABLED: (reason) => `MongoDB unavailable; persistent alerts disabled: ${reason}`,
+    SERVER_RUNNING: (port) => `Crystal Bullion server running on port ${port}`,
+    SERVER_START_FAILED: 'Server failed to start:',
+    STARTUP_FAILED: 'Startup failed:',
+    GOLD_API_UNAVAILABLE: (metal) => `GoldAPI ${metal} price unavailable; using cached or demo price.`,
+    GOLD_API_KEY_MISSING: 'GOLD_API_KEY is not configured; using demo prices.',
+  }),
+  ai: Object.freeze({
+    COUNTRY_RATE_HEADER: (market, metal, currency) =>
+      `Estimated ${market} ${metal} selling/ask rates (${currency} per gram):`,
+    COUNTRY_RATE_LINE: (purity, amount) => `- ${purity}: ${amount} / gram`,
+    COUNTRY_RATE_SOURCE: (source, updatedAt, exchangeRateSource) =>
+      `Source: ${source}${updatedAt ? `; spot quote ${updatedAt}` : ''}. Exchange rates: ${exchangeRateSource}.`,
+    COUNTRY_RATE_CONVERSION: (fromCurrency, toCurrency, rate) =>
+      `Currency conversion: 1 ${fromCurrency} ≈ ${rate} ${toCurrency} (simulated FX).`,
+    COUNTRY_RATE_NOTE: (market) =>
+      `These use the app's price source and are not verified ${market} retail rates. Local taxes, duties, dealer premiums and making charges may differ.`,
+    COUNTRY_RATE_UNSUPPORTED_PURITY: (metal) =>
+      `That purity is unavailable for ${metal}. Please choose a supported ${metal} purity.`,
   }),
 });
 

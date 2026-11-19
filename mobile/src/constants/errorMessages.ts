@@ -1,0 +1,15 @@
+export const ERROR_MESSAGES = {
+  MISSING_API_URL: "Set EXPO_PUBLIC_API_BASE_URL to your computer's LAN address and port 5000.",
+  REQUEST_CANCELLED: 'Request cancelled.',
+  REQUEST_TIMEOUT: 'Crystal API request timed out. Check the backend connection.',
+  NETWORK_UNAVAILABLE: 'Cannot reach the Crystal API. Check the backend address and Wi-Fi connection.',
+  HTTP_STATUS: (status: number) => `Crystal API returned HTTP ${status}.`,
+  INVALID_JSON: 'Crystal API returned an invalid JSON response.',
+  INVALID_PRICES: 'Crystal API returned invalid price data.',
+  INVALID_HISTORY: 'Crystal API returned invalid price history.',
+  INVALID_AI_REPLY: 'Goldyy returned an invalid response.',
+  UNSUPPORTED_RATE: (metal: string, fineness: number) => `Unsupported Crystal rate: ${metal} ${fineness}`,
+  CURRENCY_PROVIDER: 'useCurrency must be used within CurrencyProvider',
+  LOCALE_PROVIDER: 'useLocale must be used within LocaleProvider',
+  THEME_PROVIDER: 'useTheme must be used within ThemeProvider',
+} as const;

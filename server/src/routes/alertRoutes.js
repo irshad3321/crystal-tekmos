@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import routes from '../constants/routes.js';
 import {
   createAlert,
   getAllAlerts,
@@ -9,10 +10,10 @@ import {
 
 const router = Router();
 
-router.post('/', createAlert);
-router.get('/', getAllAlerts);
-router.get('/:id', getAlertById);
-router.patch('/:id', updateAlert);
-router.delete('/:id', deleteAlert);
+router.post(routes.ROOT, createAlert);
+router.get(routes.ROOT, getAllAlerts);
+router.get(routes.ALERT_BY_ID, getAlertById);
+router.patch(routes.ALERT_BY_ID, updateAlert);
+router.delete(routes.ALERT_BY_ID, deleteAlert);
 
 export default router;

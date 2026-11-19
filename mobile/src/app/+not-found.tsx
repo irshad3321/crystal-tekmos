@@ -1,3 +1,5 @@
+import { COPY } from '@/constants/copy';
+import { SCREEN_ROUTES } from '@/constants/navigation';
 import { Link } from 'expo-router';
 import { Image, StyleSheet, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
@@ -11,9 +13,9 @@ export default function NotFoundScreen() {
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   return <View style={styles.page}>
     <Image source={require('../../assets/images/crystal_icon_gold.png')} style={styles.icon} resizeMode="contain" />
-    <Text style={styles.title}>Page unavailable</Text>
-    <Text style={styles.copy}>Return to the Crystal Bullion dashboard.</Text>
-    <Link href="/" style={styles.link}>Back to dashboard</Link>
+    <Text style={styles.title}>{COPY.PAGE_UNAVAILABLE}</Text>
+    <Text style={styles.copy}>{COPY.RETURN_TO_THE_CRYSTAL_BULLION_DASHBOARD}</Text>
+    <Link href={SCREEN_ROUTES.DASHBOARD} style={styles.link}>{COPY.BACK_TO_DASHBOARD}</Link>
   </View>;
 }
 

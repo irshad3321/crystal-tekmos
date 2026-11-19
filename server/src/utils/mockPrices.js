@@ -1,5 +1,6 @@
 import currencies from '../constants/currencies.js';
 import metals from '../constants/metals.js';
+import messages from '../constants/messages.js';
 
 // AED per gram. Edit these values to change the demo prices.
 const mockPriceValues = Object.freeze({
@@ -17,7 +18,7 @@ const mockPriceValues = Object.freeze({
 const mockPrices = Object.freeze(Object.values(metals).flatMap((metal) =>
   metal.purities.map((purity) => {
     const values = mockPriceValues[metal.code]?.[purity.label];
-    if (!values) throw new Error(`Missing mock price for ${metal.code} ${purity.label}`);
+    if (!values) throw new Error(messages.error.MISSING_MOCK_PRICE(metal.code, purity.label));
 
     return Object.freeze({
       metal: metal.code.toLowerCase(),
