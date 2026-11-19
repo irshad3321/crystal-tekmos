@@ -3,6 +3,7 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
+      "env": { "EXPO_PUBLIC_API_BASE_URL": "https://crystal.13-49-80-155.sslip.io" },
       "android": { "buildType": "apk" }
     }
   }
