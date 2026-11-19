@@ -2,6 +2,7 @@ import { getJson, ApiError } from './client';
 import type { Currency } from '@/constants/currencies';
 
 export type { Currency } from '@/constants/currencies';
+export type PriceSource = 'LIVE_SPOT' | 'CACHED_LIVE_SPOT' | 'SIMULATED_DEMO';
 
 export type ApiPrice = {
   metal: 'gold' | 'silver';
@@ -9,6 +10,8 @@ export type ApiPrice = {
   fineness: number;
   buyPrice: number;
   sellPrice: number;
+  source: PriceSource;
+  spotUpdatedAt: string | null;
 };
 
 export type PricesResponse = {
@@ -16,7 +19,8 @@ export type PricesResponse = {
   message: string;
   currency: Currency;
   unit: 'gram';
-  source: 'SIMULATED_DEMO';
+  source: PriceSource | 'MIXED';
+  exchangeRateSource: 'SIMULATED_DEMO';
   data: ApiPrice[];
 };
 
@@ -32,7 +36,9 @@ function isApiPrice(value: unknown): value is ApiPrice {
     && typeof price.buyPrice === 'number'
     && Number.isFinite(price.buyPrice)
     && typeof price.sellPrice === 'number'
-    && Number.isFinite(price.sellPrice);
+    && Number.isFinite(price.sellPrice)
+    && ['LIVE_SPOT', 'CACHED_LIVE_SPOT', 'SIMULATED_DEMO'].includes(price.source ?? '')
+    && (price.spotUpdatedAt === null || typeof price.spotUpdatedAt === 'string');
 }
 
 export function fetchPrices(currency: Currency): Promise<PricesResponse> {
@@ -44,7 +50,8 @@ export function fetchPrices(currency: Currency): Promise<PricesResponse> {
       if (!value || typeof value !== 'object') throw new ApiError('Crystal API returned invalid price data.');
       const result = value as Partial<PricesResponse>;
       if (result.success !== true || result.currency !== currency || result.unit !== 'gram'
-        || result.source !== 'SIMULATED_DEMO' || !Array.isArray(result.data) || result.data.length === 0
+        || !['LIVE_SPOT', 'CACHED_LIVE_SPOT', 'SIMULATED_DEMO', 'MIXED'].includes(result.source ?? '')
+        || !Array.isArray(result.data) || result.data.length === 0
         || !result.data.every(isApiPrice)) {
         throw new ApiError('Crystal API returned invalid price data.');
       }

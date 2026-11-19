@@ -71,8 +71,8 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
   }
 }
 
-export function getJson<T>(path: string): Promise<T> {
-  return requestJson<T>(path);
+export function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(path, { signal });
 }
 
 export function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {

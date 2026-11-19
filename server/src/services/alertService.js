@@ -77,16 +77,17 @@ function requireDatabase() {
   }
 }
 
-function evaluate(fields) {
-  // The existing price service owns currency conversion and supplies the demo sell rate.
-  const price = getPriceByMetal(fields.metal, fields.currency).data.find(
+async function evaluate(fields) {
+  // The price service owns currency conversion and supplies the current available sell rate.
+  const prices = await getPriceByMetal(fields.metal, fields.currency);
+  const price = prices.data.find(
     (item) => item.fineness === fields.purity,
   );
   const currentPrice = price.sellPrice;
   const conditionMet = fields.condition === 'above'
     ? currentPrice >= fields.targetPrice
     : currentPrice <= fields.targetPrice;
-  return { currentPrice, conditionMet };
+  return { currentPrice, conditionMet, priceSource: price.source };
 }
 
 function toResponse(alert, evaluation) {
@@ -100,14 +101,14 @@ function toResponse(alert, evaluation) {
     status: alert.status,
     currentPrice: evaluation.currentPrice,
     conditionMet: evaluation.conditionMet,
-    priceType: 'SIMULATED',
+    priceType: evaluation.priceSource,
     createdAt: alert.createdAt,
     updatedAt: alert.updatedAt,
   };
 }
 
 async function checkAndFormat(alert) {
-  const evaluation = evaluate(alert);
+  const evaluation = await evaluate(alert);
   if (alert.status === 'active' && evaluation.conditionMet) {
     alert.status = 'triggered';
     await alert.save();
@@ -119,7 +120,7 @@ async function createAlert(input) {
   validateInput(input);
   const fields = normalizeFields(input);
   const requestedStatus = input.status === undefined ? 'active' : normalizeWritableStatus(input.status);
-  const evaluation = evaluate(fields);
+  const evaluation = await evaluate(fields);
   requireDatabase();
 
   const status = requestedStatus === 'active' && evaluation.conditionMet ? 'triggered' : requestedStatus;
@@ -168,7 +169,7 @@ async function updateAlert(id, input) {
   const requestedStatus = validatedStatus !== undefined
     ? validatedStatus
     : (criteriaChanged && alert.status === 'triggered' ? 'active' : alert.status);
-  const evaluation = evaluate(fields);
+  const evaluation = await evaluate(fields);
   const status = requestedStatus === 'active' && evaluation.conditionMet ? 'triggered' : requestedStatus;
 
   Object.assign(alert, fields, { status });

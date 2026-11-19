@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { Card, SectionTitle, SegmentedControl } from '@/components/DashboardUI';
@@ -9,7 +9,7 @@ import type { SpotRate } from '@/components/SpotRateCard';
 import type { Currency } from '@/constants/currencies';
 import { fetchPriceHistory, type HistoryPoint, type HistoryRange } from '@/api/priceHistory';
 
-const graphPeriods: readonly HistoryRange[] = ['1D', '1W', '1M', '1Y'];
+const graphPeriods: readonly HistoryRange[] = ['1D', '1W', '1M', '3M', '1Y'];
 
 const chartHeight = 194;
 
@@ -68,29 +68,59 @@ export function PriceGraph({ rate, currency }: { rate?: SpotRate; currency: Curr
   const [period, setPeriod] = useState<HistoryRange>('1D');
   const [history, setHistory] = useState<HistoryPoint[] | null>(null);
   const [dayHistory, setDayHistory] = useState<HistoryPoint[] | null>(null);
+  const [historyKey, setHistoryKey] = useState('');
   const [error, setError] = useState('');
+  const [errorKey, setErrorKey] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+  const inFlight = useRef<Promise<void> | null>(null);
   const metal = rate?.metal;
   const purity = rate ? Number(rate.purity) : undefined;
+  const ask = rate?.ask;
+  const queryKey = `${metal}:${purity}:${currency}:${period}:${ask}`;
 
   useEffect(() => {
     if (!metal || purity === undefined) return;
-    let active = true;
-    const request = fetchPriceHistory(metal, purity, currency, period);
-    const dayRequest = period === '1D' ? request : fetchPriceHistory(metal, purity, currency, '1D');
-    Promise.all([request, dayRequest])
-      .then(([rangeData, dayData]) => {
-        if (active) { setHistory(rangeData); setDayHistory(dayData); setError(''); }
-      })
-      .catch(cause => {
-        if (active) { setHistory(null); setDayHistory(null); setError(cause instanceof Error ? cause.message : 'Unable to load price history.'); }
-      });
-    return () => { active = false; };
-  }, [metal, purity, currency, period, retryCount]);
+    const controller = new AbortController();
+    const previous = inFlight.current;
+    const run = async () => {
+      // Finish cancellation of an older selection before starting its replacement.
+      if (previous) await previous;
+      // Let an immediate cleanup (including React development effect replay) cancel before fetch starts.
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
+      try {
+        const request = fetchPriceHistory(metal, purity, currency, period, controller.signal);
+        const dayRequest = period === '1D' ? request : fetchPriceHistory(metal, purity, currency, '1D', controller.signal);
+        const responses = await Promise.allSettled([request, dayRequest]);
+        if (controller.signal.aborted) return;
+        const failed = responses.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
+        const [rangeData, dayData] = responses.map(result => result.status === 'fulfilled' ? result.value : []);
+        if (rangeData.at(-1)?.price !== Number(ask) || dayData.at(-1)?.price !== Number(ask)) {
+          setError('Spot rate changed while the graph loaded. Retry after the price card updates.');
+          setErrorKey(queryKey);
+          return;
+        }
+        setHistory(rangeData);
+        setDayHistory(dayData);
+        setHistoryKey(queryKey);
+        setError('');
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        setError(cause instanceof Error ? cause.message : 'Unable to load price history.');
+        setErrorKey(queryKey);
+      }
+    };
+    inFlight.current = run();
+    return () => { controller.abort(); };
+  }, [metal, purity, currency, period, ask, queryKey, retryCount]);
 
-  const values = history?.map(point => point.price);
-  const dayValues = dayHistory?.map(point => point.price);
-  const current = Number(rate?.ask);
+  const current = Number(ask);
+  const visibleHistory = historyKey === queryKey ? history : null;
+  const visibleDayHistory = historyKey === queryKey ? dayHistory : null;
+  const values = visibleHistory?.map(point => point.price);
+  const dayValues = visibleDayHistory?.map(point => point.price);
+  const visibleError = errorKey === queryKey ? error : '';
   const dayChange = dayValues ? current - dayValues[0] : 0;
   const dayChangePercent = dayValues ? dayChange / dayValues[0] * 100 : 0;
   const low = dayValues ? Math.min(...dayValues) : 0;
@@ -112,7 +142,7 @@ export function PriceGraph({ rate, currency }: { rate?: SpotRate; currency: Curr
           <View style={styles.mockBadge}><Text style={styles.mockBadgeText}>MOCK HISTORY</Text></View>
         </View>
         <SegmentedControl items={graphPeriods} value={period} onChange={next => { setHistory(null); setDayHistory(null); setError(''); setPeriod(next); }} />
-        {error ? <Text style={styles.note}>{error} <Text onPress={() => { setError(''); setRetryCount(count => count + 1); }}>RETRY</Text></Text>
+        {visibleError ? <Text style={styles.note}>{visibleError} <Text onPress={() => { setError(''); setRetryCount(count => count + 1); }}>RETRY</Text></Text>
           : values && dayValues ? <Chart values={values} color={color} currency={currency} />
             : <Text style={styles.note}>Loading simulated history…</Text>}
         {values && dayValues && <>
@@ -140,7 +170,7 @@ export function PriceGraph({ rate, currency }: { rate?: SpotRate; currency: Curr
           </View>
         </View>
         </>}
-        <Text style={styles.note}>Illustrative historical data and statistics. No live market connection.</Text>
+        <Text style={styles.note}>Simulated history and statistics anchored to the latest available spot estimate.</Text>
       </Card>
     </View>
   );

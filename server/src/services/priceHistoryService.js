@@ -1,5 +1,5 @@
 import messages from '../constants/messages.js';
-import { convertPrice, getPriceByMetal } from './priceService.js';
+import { convertPrice, getPriceReference } from './priceService.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HISTORY_DECIMAL_PLACES = 4;
@@ -53,14 +53,14 @@ function generatePrices(referencePriceAED, metal, purity, range, config) {
     prices.push(prices[index - 1] * (1 + randomMove + gentleCycle));
   }
 
-  // Scale the whole path so its final point matches the current demo price.
+  // Scale the simulated path so its final point meets the current reference price.
   const anchor = referencePriceAED / prices[config.intervals];
   return prices.map((price, index) => index === config.intervals
     ? referencePriceAED
     : price * anchor);
 }
 
-function getPriceHistory({ metal, purity, currency, range } = {}) {
+async function getPriceHistory({ metal, purity, currency, range } = {}) {
   if (typeof metal !== 'string' || !metal.trim()) {
     throw invalidRequest(messages.error.UNSUPPORTED_METAL);
   }
@@ -78,30 +78,29 @@ function getPriceHistory({ metal, purity, currency, range } = {}) {
   const selectedRange = range.trim().toUpperCase();
   const config = ranges[selectedRange];
 
-  // The price service validates metal/currency and supplies the current AED sell rate.
-  const currentPrices = getPriceByMetal(selectedMetal, 'AED');
-  const selectedPrice = currentPrices.data.find((price) => price.fineness === selectedPurity);
-  if (!selectedPrice) {
-    throw invalidRequest(messages.error.UNSUPPORTED_PURITY);
-  }
-
-  const latestPrice = convertPrice(selectedPrice.sellPrice, selectedCurrency, HISTORY_DECIMAL_PLACES);
+  // Use the same unrounded AED reference and final two-decimal conversion as the price card.
+  const selectedPrice = await getPriceReference(selectedMetal, selectedPurity, selectedCurrency);
   const simulatedPricesAED = generatePrices(
-    selectedPrice.sellPrice,
+    selectedPrice.sellAED,
     selectedMetal,
     selectedPurity,
     selectedRange,
     config,
   );
-  const now = Date.now();
-  const start = now - config.durationMs;
+  const generatedAt = new Date().toISOString();
+  const quoteTimestamp = selectedPrice.spotUpdatedAt;
+  const end = quoteTimestamp ? Date.parse(quoteTimestamp) : Date.parse(generatedAt);
+  const start = end - config.durationMs;
   const data = simulatedPricesAED.map((priceAED, index) => ({
     timestamp: new Date(index === config.intervals
-      ? now
+      ? end
       : start + Math.round(index * config.durationMs / config.intervals)).toISOString(),
     price: index === config.intervals
-      ? latestPrice
+      ? selectedPrice.sellPrice
       : convertPrice(priceAED, selectedCurrency, HISTORY_DECIMAL_PLACES),
+    timestampType: index === config.intervals
+      ? quoteTimestamp ? 'PROVIDER_QUOTE' : 'GENERATED_REFERENCE'
+      : 'SIMULATED',
   }));
 
   return {
@@ -109,8 +108,11 @@ function getPriceHistory({ metal, purity, currency, range } = {}) {
     purity: selectedPurity,
     currency: selectedCurrency,
     range: selectedRange,
-    unit: currentPrices.unit,
+    unit: selectedPrice.unit,
     priceType: 'SIMULATED',
+    spotSource: selectedPrice.source,
+    spotUpdatedAt: quoteTimestamp,
+    generatedAt,
     data,
   };
 }

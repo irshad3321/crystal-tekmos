@@ -1,65 +1,135 @@
-import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { AppState, Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SectionTitle, SegmentedControl } from '@/components/DashboardUI';
 import { SpotRateCard, type SpotRate } from '@/components/SpotRateCard';
 import { PriceGraph } from '@/features/prices/PriceGraph';
 import { BullionCalculator } from '@/features/calculator/BullionCalculator';
+import { WhatsAppTradeLock } from '@/features/wholesale/WhatsAppTradeLock';
 import { PriceAlerts } from '@/features/prices/PriceAlerts';
 import { rowDirection, useLocale } from '@/hooks/useLocale';
 import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { fetchPrices, type Currency } from '@/api/prices';
+import { fetchPrices, type Currency, type PricesResponse } from '@/api/prices';
 import { mapPriceRates } from '@/features/prices/mapPriceRates';
+import { spotPriceUnits, type SpotPriceUnit } from '@/features/prices/spotPriceUnit';
 import { currencies, currencyCodes } from '@/constants/currencies';
 import { useCurrency } from '@/hooks/useCurrency';
 
-const units = ['Per Gram', 'Per Oz'] as const;
+const PRICE_REFRESH_INTERVAL_MS = 5_000;
 
 export default function DashboardScreen() {
   const { colors, mode, toggleTheme } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [selectedRate, setSelectedRate] = useState('gold-24k');
-  const { currency, setCurrency } = useCurrency();
+  const [priceUnit, setPriceUnit] = useState<SpotPriceUnit>('Per Gram');
+  const { currency, setCurrency, ready: currencyReady } = useCurrency();
   const [rates, setRates] = useState<SpotRate[]>([]);
+  const [displayCurrency, setDisplayCurrency] = useState<Currency>(currency);
+  const [priceSource, setPriceSource] = useState<PricesResponse['source']>('SIMULATED_DEMO');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
   const requestVersion = useRef(0);
+  const activePriceRequest = useRef<Promise<PricesResponse> | null>(null);
+  const queuedRefresh = useRef<(() => void) | null>(null);
+  const refreshNow = useRef<() => void>(() => {});
+  const rateCurrency = rates.length > 0 ? displayCurrency : currency;
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    if (!currencyReady) return;
+
     let active = true;
+    let appState = AppState.currentState === 'background' || AppState.currentState === 'inactive'
+      ? AppState.currentState : 'active';
+    let timer: ReturnType<typeof setInterval> | undefined;
     const version = requestVersion.current;
-    fetchPrices(currency)
-      .then(response => {
-        const mapped = mapPriceRates(response.data);
-        if (active && version === requestVersion.current) setRates(mapped);
-      })
-      .catch(cause => {
-        if (active && version === requestVersion.current) setError(cause instanceof Error ? cause.message : 'Unable to load Crystal prices.');
-      })
-      .finally(() => { if (active && version === requestVersion.current) setLoading(false); });
-    return () => { active = false; };
-  }, [currency, retryCount]);
+
+    const refresh = () => {
+      if (!active || appState !== 'active') return;
+      if (activePriceRequest.current) {
+        queuedRefresh.current = refresh;
+        return;
+      }
+      const request = fetchPrices(currency);
+      activePriceRequest.current = request;
+      void request
+        .then(response => {
+          const mapped = mapPriceRates(response.data);
+          if (active && version === requestVersion.current) {
+            setRates(mapped);
+            setDisplayCurrency(response.currency);
+            setPriceSource(response.source);
+            setError(null);
+          }
+        })
+        .catch(cause => {
+          if (active && version === requestVersion.current) {
+            setError(cause instanceof Error ? cause.message : 'Unable to load Crystal prices.');
+          }
+        })
+        .finally(() => {
+          if (active && version === requestVersion.current) setLoading(false);
+          if (activePriceRequest.current === request) {
+            activePriceRequest.current = null;
+            const queued = queuedRefresh.current;
+            queuedRefresh.current = null;
+            queued?.();
+          }
+        });
+    };
+    refreshNow.current = refresh;
+
+    const stopTimer = () => {
+      if (timer) clearInterval(timer);
+      timer = undefined;
+    };
+
+    const startTimer = () => {
+      stopTimer();
+      timer = setInterval(refresh, PRICE_REFRESH_INTERVAL_MS);
+    };
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      const wasActive = appState === 'active';
+      appState = nextState;
+      if (nextState !== 'active') {
+        stopTimer();
+      } else if (!wasActive) {
+        refresh();
+        startTimer();
+      }
+    });
+
+    if (appState === 'active') {
+      refresh();
+      startTimer();
+    }
+
+    return () => {
+      active = false;
+      stopTimer();
+      subscription.remove();
+      if (queuedRefresh.current === refresh) queuedRefresh.current = null;
+      if (refreshNow.current === refresh) refreshNow.current = () => {};
+    };
+  }, [currency, currencyReady]));
 
   const changeCurrency = (next: Currency) => {
     if (next === currency) return;
     requestVersion.current += 1;
     setLoading(true);
     setError(null);
-    setRates([]);
     setCurrency(next);
   };
 
   const retryPrices = () => {
-    requestVersion.current += 1;
     setLoading(true);
     setError(null);
-    setRetryCount(count => count + 1);
+    refreshNow.current();
   };
 
   return (
@@ -82,45 +152,49 @@ export default function DashboardScreen() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.sectionHeading}>
-          <SectionTitle title="Simulated Spot Rates" />
-          <View style={styles.previewBadge}><View style={styles.previewDot} /><Text style={styles.previewText}>MOCK PRICES</Text></View>
+          <SectionTitle title="Spot Rates" />
+          <View style={styles.previewBadge}><View style={styles.previewDot} /><Text style={styles.previewText}>{loading && rates.length === 0 ? 'LOADING' : error ? rates.length > 0 ? 'UPDATE FAILED' : 'PRICE UNAVAILABLE' : priceSource === 'LIVE_SPOT' ? 'LIVE SPOT' : priceSource === 'CACHED_LIVE_SPOT' ? 'CACHED SPOT' : priceSource === 'MIXED' ? 'MIXED SOURCES' : 'MOCK PRICES'}</Text></View>
         </View>
         <View style={styles.controlRow}>
-          <Text style={styles.currencyLabel}>RATES IN {currency}</Text>
-          <View style={styles.unitControl}><SegmentedControl items={units} value="Per Gram" onChange={() => {}} /></View>
+          <Text style={styles.currencyLabel}>RATES IN {rateCurrency}</Text>
+          <View style={styles.unitControl}><SegmentedControl items={spotPriceUnits} value={priceUnit} onChange={setPriceUnit} /></View>
         </View>
 
         <View style={styles.cards}>
-          {loading && <Text style={styles.statusText}>Loading simulated prices…</Text>}
-          {!loading && error && <View style={styles.errorCard}>
+          {loading && rates.length === 0 && <Text style={styles.statusText}>Loading simulated prices…</Text>}
+          {!loading && error && rates.length === 0 && <View style={styles.errorCard}>
             <Text style={styles.errorText}>{error}</Text>
             <Pressable onPress={retryPrices} style={styles.retryButton} accessibilityRole="button">
               <Text style={styles.retryText}>RETRY</Text>
             </Pressable>
           </View>}
-          {!loading && !error && rates.map(rate => (
+          {rates.map(rate => (
             <SpotRateCard
               key={rate.id}
               rate={rate}
               selected={selectedRate === rate.id}
               onPress={() => setSelectedRate(rate.id)}
-              currency={currency}
+              currency={rateCurrency}
+              unit={priceUnit}
             />
           ))}
-          {!loading && !error && <Text style={styles.unavailableText}>24H low and high are unavailable from the price API.</Text>}
+          {rates.length > 0 && <Text style={styles.unavailableText}>Spot-based estimates · Simulated exchange rates and buy/sell spreads. 24H low and high are unavailable.</Text>}
+          {rates.length > 0 && priceSource !== 'SIMULATED_DEMO' && <Pressable onPress={() => { void Linking.openURL('https://goldapi.dev'); }} accessibilityRole="link"><Text style={styles.unavailableText}>Spot data: GoldAPI.dev</Text></Pressable>}
         </View>
 
-        <PriceGraph key={`${selectedRate}-${currency}`} rate={rates.find(rate => rate.id === selectedRate) ?? rates[0]} currency={currency} />
+        <PriceGraph key={`${selectedRate}-${rateCurrency}`} rate={rates.find(rate => rate.id === selectedRate) ?? rates[0]} currency={rateCurrency} />
 
-        <BullionCalculator rates={rates} currency={currency} />
+        <BullionCalculator rates={rates} currency={rateCurrency} />
 
-        <PriceAlerts rates={rates} currency={currency} />
+        <WhatsAppTradeLock rates={rates} currency={rateCurrency} priceError={error !== null} onRetry={retryPrices} />
+
+        <PriceAlerts rates={rates} currency={rateCurrency} />
 
         <View style={styles.footer}>
           <Image source={require('../../assets/images/crystal_icon_gold.png')} style={styles.footerIcon} resizeMode="contain" />
           <Text style={styles.footerBrand}>CRYSTAL BULLION</Text>
           <Text style={styles.footerText}>Dubai & Muscat Desk</Text>
-          <Text style={styles.footerNote}>Indicative UI samples. No live market connection.</Text>
+          <Text style={styles.footerNote}>Indicative spot estimates. Exchange rates and chart history are simulated.</Text>
         </View>
       </ScrollView>
       <Pressable style={styles.aiLaunch} onPress={() => router.push('/ai-assistant')} accessibilityRole="button" accessibilityLabel={locale.isRTL ? 'افتح مساعد غولدي' : 'Open Goldyy assistant'}>

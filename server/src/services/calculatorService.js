@@ -46,7 +46,7 @@ function roundMoney(amount) {
   return Number(amount.toFixed(2));
 }
 
-function calculateBullion(input) {
+async function calculateBullion(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw invalidRequest(messages.error.INVALID_REQUEST);
   }
@@ -66,7 +66,7 @@ function calculateBullion(input) {
   const convertedWeightInGrams = convertWeightToGrams(weight, weightUnit);
 
   // The existing price service validates metal/currency and performs currency conversion.
-  const prices = getPriceByMetal(metal, currency);
+  const prices = await getPriceByMetal(metal, currency);
   const selectedPrice = prices.data.find((price) => price.fineness === selectedPurity);
   if (!selectedPrice) {
     throw invalidRequest(messages.error.UNSUPPORTED_PURITY);
@@ -90,7 +90,7 @@ function calculateBullion(input) {
     vatPercentage: appliedVatPercentage,
     vatAmount,
     finalAmount,
-    priceType: 'SIMULATED',
+    priceType: selectedPrice.source,
   };
 }
 

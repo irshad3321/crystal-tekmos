@@ -18,6 +18,7 @@ export function mapPriceRates(prices: ApiPrice[]): SpotRate[] {
       metal: price.metal,
       ask: price.sellPrice.toFixed(2),
       bid: price.buyPrice.toFixed(2),
+      source: price.source,
     };
   });
 }

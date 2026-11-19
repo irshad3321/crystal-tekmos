@@ -97,7 +97,7 @@ export function PriceAlerts({ rates, currency }: { rates: SpotRate[]; currency: 
     <View style={styles.section}>
       <SectionTitle title="Price Target Alarms" />
       <Card style={styles.card}>
-        <Text style={styles.subtitle}>Set a target against the mock ASK price. Saved on this device.</Text>
+        <Text style={styles.subtitle}>Set a target against the indicative ASK price. Saved on this device.</Text>
 
         <View>
           <Text style={styles.fieldLabel}>METAL / PURITY</Text>
@@ -138,7 +138,7 @@ export function PriceAlerts({ rates, currency }: { rates: SpotRate[]; currency: 
             accessibilityLabel={locale.isRTL ? `سعر البيع المستهدف بعملة ${currency} لكل غرام` : `Target ask price in ${currency} per gram`}
           />
           {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
-          <Text style={styles.currentRate}>CURRENT MOCK ASK  {rates.length ? locale.money(selectedRate.ask, currency) : 'Price unavailable'} / GRAM</Text>
+          <Text style={styles.currentRate}>CURRENT ASK  {rates.length ? locale.money(selectedRate.ask, currency) : 'Price unavailable'} / GRAM</Text>
         </View>
 
         <Pressable style={[styles.addButton, (!loaded || !rates.length) && styles.addButtonDisabled]} onPress={addAlert} disabled={!loaded || !rates.length} accessibilityRole="button">
@@ -157,7 +157,7 @@ export function PriceAlerts({ rates, currency }: { rates: SpotRate[]; currency: 
             return <View key={alert.id} style={styles.alertRow}>
               <View style={styles.alertCopy}>
                 <Text style={styles.alertMetal}>{title} <Text style={styles.targetText}>≤ {locale.money(alert.targetPrice, alertCurrency)}</Text></Text>
-                <Text style={styles.alertCurrent}>{rate ? `Current mock ASK ${locale.money(rate.ask, alertCurrency)}` : 'Price unavailable'}</Text>
+                <Text style={styles.alertCurrent}>{rate ? `Current indicative ASK ${locale.money(rate.ask, alertCurrency)}` : 'Price unavailable'}</Text>
                 {rate && <Text style={[styles.status, reached ? styles.reached : styles.waiting]}>{reached ? 'TARGET REACHED' : 'WAITING FOR TARGET'}</Text>}
               </View>
               <Pressable
@@ -172,7 +172,7 @@ export function PriceAlerts({ rates, currency }: { rates: SpotRate[]; currency: 
           })}
         </View>
         {storageError && <Text style={styles.error}>Device storage is unavailable; alerts may not be saved.</Text>}
-        <Text style={styles.note}>Status uses mock prices while the app is open. No live or background notifications.</Text>
+        <Text style={styles.note}>Status uses the latest available prices while the app is open. No background notifications.</Text>
       </Card>
     </View>
   );

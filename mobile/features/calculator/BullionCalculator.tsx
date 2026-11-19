@@ -76,7 +76,7 @@ export function BullionCalculator({ rates, currency }: { rates: SpotRate[]; curr
         <View style={styles.heading}>
           <View style={styles.headingCopy}>
             <Text style={styles.title}>ESTIMATE YOUR BULLION COST</Text>
-            <Text style={styles.subtitle}>Based on the selected mock ASK rate.</Text>
+            <Text style={styles.subtitle}>Based on the selected indicative ASK rate.</Text>
           </View>
           <View style={styles.badge}><Text style={styles.badgeText}>INSTANT</Text></View>
         </View>
@@ -123,7 +123,7 @@ export function BullionCalculator({ rates, currency }: { rates: SpotRate[]; curr
             <Text style={styles.totalValue} adjustsFontSizeToFit numberOfLines={1}>{formattedTotal}</Text>
             <Text style={styles.currency}>{currency}</Text>
           </View>
-          <Text style={styles.totalNote}>Indicative estimate using mock prices. No live market connection.</Text>
+          <Text style={styles.totalNote}>Indicative estimate. Currency conversion and buy/sell spread are simulated.</Text>
         </View>
       </Card>
     </View>

@@ -6,35 +6,39 @@ import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import type { MetalRate } from '@/constants/mockRates';
 import type { Currency } from '@/constants/currencies';
+import type { PriceSource } from '@/api/prices';
+import { spotPriceForUnit, type SpotPriceUnit } from '@/features/prices/spotPriceUnit';
 
 export type SpotRate = Pick<MetalRate, 'id' | 'title' | 'subtitle' | 'purity' | 'ask' | 'bid' | 'metal'>
-  & Partial<Pick<MetalRate, 'low' | 'high'>>;
+  & Partial<Pick<MetalRate, 'low' | 'high'>> & { source?: PriceSource };
 
-export function SpotRateCard({ rate, selected, onPress, currency = 'AED' }: { rate: SpotRate; selected: boolean; onPress: () => void; currency?: Currency }) {
+export function SpotRateCard({ rate, selected, onPress, currency = 'AED', unit }: { rate: SpotRate; selected: boolean; onPress: () => void; currency?: Currency; unit: SpotPriceUnit }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
+  const ask = locale.money(spotPriceForUnit(rate.ask, unit), currency);
+  const bid = locale.money(spotPriceForUnit(rate.bid, unit), currency);
   return (
-    <Pressable onPress={onPress} style={styles.pressable} accessibilityRole="button" accessibilityLabel={locale.isRTL ? `${locale.t(rate.title)}، سعر البيع ${locale.money(rate.ask, currency)}، سعر الشراء ${locale.money(rate.bid, currency)}` : `${rate.title}, ask ${locale.money(rate.ask, currency)}, bid ${locale.money(rate.bid, currency)}`}>
+    <Pressable onPress={onPress} style={styles.pressable} accessibilityRole="button" accessibilityLabel={locale.isRTL ? `${locale.t(rate.title)}، سعر البيع ${ask}، سعر الشراء ${bid}، ${locale.t(unit)}` : `${rate.title}, ask ${ask}, bid ${bid}, ${unit}`}>
       <Card style={[styles.card, selected && styles.selected, rate.metal === 'silver' && selected && styles.selectedSilver]}>
         <View style={styles.topLine}>
           <View style={styles.nameBlock}>
             <Text style={styles.name}>{rate.title}</Text>
-            <Text style={styles.subtitle}>{rate.subtitle}  •  {rate.purity}  •  {locale.t('Per Gram')}</Text>
+            <Text style={styles.subtitle}>{rate.subtitle}  •  {rate.purity}  •  {locale.t(unit)}{rate.source ? `  •  ${locale.t(rate.source === 'LIVE_SPOT' ? 'LIVE SPOT' : rate.source === 'CACHED_LIVE_SPOT' ? 'CACHED SPOT' : 'MOCK PRICES')}` : ''}</Text>
           </View>
           {rate.id === 'gold-24k' && <View style={styles.spotBadge}><Text style={styles.spotText}>SPOT</Text></View>}
         </View>
 
         <View style={styles.askBlock}>
           <Text style={styles.askLabel}>ASK (SELLING RATE)</Text>
-          <Text style={styles.askValue} adjustsFontSizeToFit numberOfLines={1}>{locale.money(rate.ask, currency)}</Text>
+          <Text style={styles.askValue} adjustsFontSizeToFit numberOfLines={1}>{ask}</Text>
         </View>
 
         <View style={styles.footer}>
-            <Text style={styles.bidText}><Text style={styles.bidLabel}>BID: </Text>{locale.money(rate.bid, currency)}</Text>
+            <Text style={styles.bidText}><Text style={styles.bidLabel}>BID: </Text>{bid}</Text>
           <View style={styles.rangeRow}>
-              <Text style={styles.low}>↘  {locale.t('L:')} {rate.low ? locale.number(rate.low) : '—'}</Text>
-              <Text style={styles.high}>↗  {locale.t('H:')} {rate.high ? locale.number(rate.high) : '—'}</Text>
+              <Text style={styles.low}>↘  {locale.t('L:')} {rate.low ? locale.number(spotPriceForUnit(rate.low, unit)) : '—'}</Text>
+              <Text style={styles.high}>↗  {locale.t('H:')} {rate.high ? locale.number(spotPriceForUnit(rate.high, unit)) : '—'}</Text>
           </View>
         </View>
       </Card>

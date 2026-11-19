@@ -9,17 +9,17 @@ function sendPrices(res, result) {
   });
 }
 
-function getAllPrices(req, res, next) {
+async function getAllPrices(req, res, next) {
   try {
-    sendPrices(res, priceService.getAllPrices(req.query.currency));
+    sendPrices(res, await priceService.getAllPrices(req.query.currency));
   } catch (error) {
     next(error);
   }
 }
 
-function getPriceByMetal(req, res, next) {
+async function getPriceByMetal(req, res, next) {
   try {
-    sendPrices(res, priceService.getPriceByMetal(req.params.metal, req.query.currency));
+    sendPrices(res, await priceService.getPriceByMetal(req.params.metal, req.query.currency));
   } catch (error) {
     next(error);
   }
