@@ -11,6 +11,7 @@ import { ChatBubble, TypingIndicator, type ChatMessage } from './ChatBubble';
 import { quickActions, welcomeMessage } from './chatContent';
 import { askGoldyy, checkBackendConnection, getGoldyyErrorMessage } from '@/api/ai';
 import { ApiError } from '@/api/client';
+import { useCurrency } from '@/hooks/useCurrency';
 
 function initialMessages(): ChatMessage[] {
   return [{ id: 'welcome', role: 'assistant', text: welcomeMessage, timestamp: new Date() }];
@@ -19,6 +20,7 @@ function initialMessages(): ChatMessage[] {
 export function CrystalAIChat() {
   const { colors } = useTheme();
   const locale = useLocale();
+  const { currency } = useCurrency();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
@@ -87,7 +89,7 @@ export function CrystalAIChat() {
       const history = previousMessages.filter(message => message.id !== 'welcome')
         .slice(-8)
         .map(message => ({ role: message.role, text: message.text }));
-      const reply = await askGoldyy(prompt, history, controller.signal);
+      const reply = await askGoldyy(prompt, history, controller.signal, currency);
       if (version !== requestVersion.current) return;
       setConnectionStatus('connected');
       setMessages(current => [...current, {

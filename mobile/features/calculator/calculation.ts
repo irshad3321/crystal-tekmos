@@ -12,7 +12,7 @@ export const gramsPerUnit: Record<WeightUnit, number> = {
   TTB: 116.638,
 };
 
-export function calculateBullionTotal(weightText: string, unit: WeightUnit, rate: MetalRate, includeVat: boolean) {
+export function calculateBullionTotal(weightText: string, unit: WeightUnit, rate: Pick<MetalRate, 'ask'>, includeVat: boolean) {
   const normalized = weightText.trim().replace(',', '.');
   if (!/^\d+(\.\d*)?$/.test(normalized)) {
     return { total: null, error: 'Enter a valid numeric weight.' };

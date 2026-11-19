@@ -12,11 +12,11 @@ import { PriceAlerts } from '@/features/prices/PriceAlerts';
 import { rowDirection, useLocale } from '@/hooks/useLocale';
 import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { mockRates } from '@/constants/mockRates';
 import { fetchPrices, type Currency } from '@/api/prices';
 import { mapPriceRates } from '@/features/prices/mapPriceRates';
+import { currencies, currencyCodes } from '@/constants/currencies';
+import { useCurrency } from '@/hooks/useCurrency';
 
-const currencies: readonly Currency[] = ['AED', 'USD', 'OMR', 'SAR', 'INR'];
 const units = ['Per Gram', 'Per Oz'] as const;
 
 export default function DashboardScreen() {
@@ -24,7 +24,7 @@ export default function DashboardScreen() {
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [selectedRate, setSelectedRate] = useState('gold-24k');
-  const [currency, setCurrency] = useState<Currency>('AED');
+  const { currency, setCurrency } = useCurrency();
   const [rates, setRates] = useState<SpotRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +77,7 @@ export default function DashboardScreen() {
             <Pressable style={styles.languageButton} onPress={locale.toggleLanguage} accessibilityRole="button" accessibilityLabel={locale.isRTL ? 'Switch to English' : 'التبديل إلى العربية'}><Text style={styles.languageText}>{locale.isRTL ? 'EN' : 'عربي'}</Text></Pressable>
           </View>
         </View>
-        <SegmentedControl items={currencies} value={currency} onChange={changeCurrency} />
+        <SegmentedControl items={currencyCodes} value={currency} onChange={changeCurrency} labelForItem={code => `${code} / ${currencies[code].symbol}`} />
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -110,11 +110,11 @@ export default function DashboardScreen() {
           {!loading && !error && <Text style={styles.unavailableText}>24H low and high are unavailable from the price API.</Text>}
         </View>
 
-        <PriceGraph rate={mockRates.find(rate => rate.id === selectedRate) ?? mockRates[0]} />
+        <PriceGraph key={`${selectedRate}-${currency}`} rate={rates.find(rate => rate.id === selectedRate) ?? rates[0]} currency={currency} />
 
-        <BullionCalculator />
+        <BullionCalculator rates={rates} currency={currency} />
 
-        <PriceAlerts />
+        <PriceAlerts rates={rates} currency={currency} />
 
         <View style={styles.footer}>
           <Image source={require('../../assets/images/crystal_icon_gold.png')} style={styles.footerIcon} resizeMode="contain" />

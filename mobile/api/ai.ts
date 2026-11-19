@@ -1,4 +1,5 @@
 import { ApiError, getJson, postJson } from './client';
+import type { Currency } from '@/constants/currencies';
 
 export type AiHistoryItem = { role: 'user' | 'assistant'; text: string };
 
@@ -13,10 +14,10 @@ export async function checkBackendConnection(): Promise<boolean> {
   }
 }
 
-export async function askGoldyy(message: string, history: AiHistoryItem[], signal?: AbortSignal): Promise<string> {
+export async function askGoldyy(message: string, history: AiHistoryItem[], signal?: AbortSignal, currency?: Currency): Promise<string> {
   const response = await postJson<AiChatResponse>('/api/ai/chat', {
     message,
-    context: { history: history.slice(-8) },
+    context: { history: history.slice(-8), currency },
   }, signal);
   if (response?.success !== true || typeof response.reply !== 'string' || !response.reply.trim()) {
     throw new ApiError('Goldyy returned an invalid response.', undefined, 'invalid-response');

@@ -1,6 +1,7 @@
 import { getJson, ApiError } from './client';
+import type { Currency } from '@/constants/currencies';
 
-export type Currency = 'AED' | 'USD' | 'OMR' | 'SAR' | 'INR';
+export type { Currency } from '@/constants/currencies';
 
 export type ApiPrice = {
   metal: 'gold' | 'silver';

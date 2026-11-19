@@ -1,5 +1,6 @@
 import { AI_PROVIDER, getAiConfig } from '../config/ai.js';
 import { getAllPrices, getPriceByMetal } from './priceService.js';
+import currencies from '../constants/currencies.js';
 
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_HISTORY_ITEMS = 8;
@@ -63,10 +64,11 @@ function validateInput(body) {
 }
 
 function relevantPrices(message, context) {
-  if (!/(price|rate|cost|value|worth|quote|market|calculat|سعر|ثمن|تكلفة|قيمة|سوق)/i.test(message)) {
+  if (!/(price|rate|cost|value|worth|quote|market|calculat|how much|سعر|ثمن|تكلفة|قيمة|سوق)/i.test(message)) {
     return '';
   }
-  const currency = context.currency ?? 'AED';
+  const mentionedCurrency = Object.keys(currencies).find((code) => new RegExp(`\\b${code}\\b`, 'i').test(message));
+  const currency = mentionedCurrency ?? (/₹|\brupees?\b/i.test(message) ? 'INR' : context.currency ?? 'AED');
   const mentionsGold = /\bgold\b|ذهب/i.test(message);
   const mentionsSilver = /\bsilver\b|فضة/i.test(message);
   const metal = context.metal ?? (mentionsGold === mentionsSilver ? undefined : mentionsGold ? 'gold' : 'silver');

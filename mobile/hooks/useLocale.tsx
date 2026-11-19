@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type P
 import { I18nManager, Platform } from 'react-native';
 import { fonts } from '@/constants/brand';
 import { ar } from '@/constants/translations';
+import { formatCurrency, type Currency } from '@/constants/currencies';
 
 export type Language = 'en' | 'ar';
 const storageKey = 'crystal.language.v1';
@@ -14,6 +15,7 @@ type LocaleContextValue = {
   toggleLanguage: () => void;
   t: (text: string) => string;
   number: (value: number | string, decimals?: number, signed?: boolean) => string;
+  money: (value: number | string, currency: Currency, decimals?: number) => string;
   percent: (value: number, signed?: boolean) => string;
   typefaces: { regular?: string; semibold?: string; bold?: string };
 };
@@ -77,6 +79,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
         signDisplay: signed ? 'always' : 'auto',
       }).format(numeric);
     },
+    money: (amount, currency, decimals = 2) => formatCurrency(amount, currency, language, decimals),
     percent: (value, signed = false) => new Intl.NumberFormat(language === 'ar' ? 'ar-AE-u-nu-arab' : 'en-US', {
       style: 'percent',
       minimumFractionDigits: 2,
