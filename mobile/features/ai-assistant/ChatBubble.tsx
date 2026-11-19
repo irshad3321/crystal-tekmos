@@ -24,7 +24,7 @@ export function ChatBubble({ message }: { message: ChatMessage }) {
       </View>}
       <View style={styles.content}>
         <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-          <Text style={[styles.messageText, isUser && styles.userText]} translateContent={!isUser}>{message.text}</Text>
+          <Text style={[styles.messageText, isUser && styles.userText]} translateContent={message.id === 'welcome'}>{message.text}</Text>
         </View>
         <Text style={[styles.timestamp, isUser && styles.userTimestamp]}>{message.timestamp.toLocaleTimeString(locale.language === 'ar' ? 'ar-AE-u-nu-arab' : 'en-US', { hour: 'numeric', minute: '2-digit' })}</Text>
       </View>
@@ -36,7 +36,7 @@ export function TypingIndicator() {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
-  return <View style={styles.row} accessibilityLabel="Crystal AI is typing">
+  return <View style={styles.row} accessibilityLabel="Goldyy is typing">
     <View style={styles.avatar}>
       <Image source={require('../../assets/images/crystal_icon_gold.png')} style={styles.avatarImage} resizeMode="contain" />
     </View>

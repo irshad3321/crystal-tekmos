@@ -22,7 +22,7 @@ export function SectionTitle({ title }: { title: string }) {
   </View>;
 }
 
-export function SegmentedControl<T extends string>({ items, value, onChange }: { items: readonly T[]; value: T; onChange: (value: T) => void }) {
+export function SegmentedControl<T extends string>({ items, value, onChange, labelForItem }: { items: readonly T[]; value: T; onChange: (value: T) => void; labelForItem?: (item: T) => string }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
@@ -34,7 +34,7 @@ export function SegmentedControl<T extends string>({ items, value, onChange }: {
       accessibilityState={{ selected: value === item }}
       style={[styles.segment, value === item && styles.segmentSelected]}
     >
-      <Text style={[styles.segmentText, value === item && styles.segmentTextSelected]}>{item}</Text>
+      <Text style={[styles.segmentText, value === item && styles.segmentTextSelected]}>{labelForItem?.(item) ?? item}</Text>
     </Pressable>)}
   </View>;
 }

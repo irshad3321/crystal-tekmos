@@ -5,18 +5,20 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { LocaleProvider, useLocale } from '@/hooks/useLocale';
+import { CurrencyProvider, useCurrency } from '@/hooks/useCurrency';
 
 SplashScreen.preventAutoHideAsync();
 
 function Navigation() {
   const { mode, colors, ready } = useTheme();
   const { ready: localeReady } = useLocale();
+  const { ready: currencyReady } = useCurrency();
 
   useEffect(() => {
-    if (ready && localeReady) SplashScreen.hideAsync();
-  }, [ready, localeReady]);
+    if (ready && localeReady && currencyReady) SplashScreen.hideAsync();
+  }, [ready, localeReady, currencyReady]);
 
-  if (!ready || !localeReady) return null;
+  if (!ready || !localeReady || !currencyReady) return null;
 
   return <>
     <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
@@ -37,5 +39,5 @@ export default function RootLayout() {
 
   if (!loaded) return null;
 
-  return <ThemeProvider><LocaleProvider><Navigation /></LocaleProvider></ThemeProvider>;
+  return <ThemeProvider><LocaleProvider><CurrencyProvider><Navigation /></CurrencyProvider></LocaleProvider></ThemeProvider>;
 }

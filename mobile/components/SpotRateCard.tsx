@@ -5,13 +5,17 @@ import { rowDirection, useLocale } from '@/hooks/useLocale';
 import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import type { MetalRate } from '@/constants/mockRates';
+import type { Currency } from '@/constants/currencies';
 
-export function SpotRateCard({ rate, selected, onPress }: { rate: MetalRate; selected: boolean; onPress: () => void }) {
+export type SpotRate = Pick<MetalRate, 'id' | 'title' | 'subtitle' | 'purity' | 'ask' | 'bid' | 'metal'>
+  & Partial<Pick<MetalRate, 'low' | 'high'>>;
+
+export function SpotRateCard({ rate, selected, onPress, currency = 'AED' }: { rate: SpotRate; selected: boolean; onPress: () => void; currency?: Currency }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   return (
-    <Pressable onPress={onPress} style={styles.pressable} accessibilityRole="button" accessibilityLabel={locale.isRTL ? `${locale.t(rate.title)}، سعر البيع ${locale.number(rate.ask)} د.إ، سعر الشراء ${locale.number(rate.bid)} د.إ` : `${rate.title}, ask ${rate.ask} AED, bid ${rate.bid} AED`}>
+    <Pressable onPress={onPress} style={styles.pressable} accessibilityRole="button" accessibilityLabel={locale.isRTL ? `${locale.t(rate.title)}، سعر البيع ${locale.money(rate.ask, currency)}، سعر الشراء ${locale.money(rate.bid, currency)}` : `${rate.title}, ask ${locale.money(rate.ask, currency)}, bid ${locale.money(rate.bid, currency)}`}>
       <Card style={[styles.card, selected && styles.selected, rate.metal === 'silver' && selected && styles.selectedSilver]}>
         <View style={styles.topLine}>
           <View style={styles.nameBlock}>
@@ -23,14 +27,14 @@ export function SpotRateCard({ rate, selected, onPress }: { rate: MetalRate; sel
 
         <View style={styles.askBlock}>
           <Text style={styles.askLabel}>ASK (SELLING RATE)</Text>
-          <Text style={styles.askValue}>{locale.number(rate.ask)}</Text>
+          <Text style={styles.askValue} adjustsFontSizeToFit numberOfLines={1}>{locale.money(rate.ask, currency)}</Text>
         </View>
 
         <View style={styles.footer}>
-            <Text style={styles.bidText}><Text style={styles.bidLabel}>BID: </Text>{locale.number(rate.bid)}</Text>
+            <Text style={styles.bidText}><Text style={styles.bidLabel}>BID: </Text>{locale.money(rate.bid, currency)}</Text>
           <View style={styles.rangeRow}>
-              <Text style={styles.low}>↘  {locale.t('L:')} {locale.number(rate.low)}</Text>
-              <Text style={styles.high}>↗  {locale.t('H:')} {locale.number(rate.high)}</Text>
+              <Text style={styles.low}>↘  {locale.t('L:')} {rate.low ? locale.number(rate.low) : '—'}</Text>
+              <Text style={styles.high}>↗  {locale.t('H:')} {rate.high ? locale.number(rate.high) : '—'}</Text>
           </View>
         </View>
       </Card>

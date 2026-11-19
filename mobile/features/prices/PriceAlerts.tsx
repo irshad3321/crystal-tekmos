@@ -8,8 +8,12 @@ import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { mockRates } from '@/constants/mockRates';
 import { normalizeNumericInput } from '@/constants/numberFormat';
+import { currencies, type Currency } from '@/constants/currencies';
+import type { SpotRate } from '@/components/SpotRateCard';
+import { fetchPrices } from '@/api/prices';
+import { mapPriceRates } from './mapPriceRates';
 
-type PriceAlert = { id: string; metalId: string; targetPrice: number };
+type PriceAlert = { id: string; metalId: string; targetPrice: number; currency?: Currency };
 const storageKey = 'crystal.priceAlerts.v1';
 
 function isPriceAlert(value: unknown): value is PriceAlert {
@@ -20,21 +24,36 @@ function isPriceAlert(value: unknown): value is PriceAlert {
     && mockRates.some(rate => rate.id === alert.metalId)
     && typeof alert.targetPrice === 'number'
     && Number.isFinite(alert.targetPrice)
-    && alert.targetPrice > 0;
+    && alert.targetPrice > 0
+    && (alert.currency === undefined || (typeof alert.currency === 'string' && Object.hasOwn(currencies, alert.currency)));
 }
 
-export function PriceAlerts() {
+export function PriceAlerts({ rates, currency }: { rates: SpotRate[]; currency: Currency }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [metalId, setMetalId] = useState(mockRates[0].id);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const [targetText, setTargetText] = useState('');
+  const [targetInput, setTargetInput] = useState<{ currency: Currency; value: string }>({ currency, value: '' });
+  const targetText = targetInput.currency === currency ? targetInput.value : '';
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [storageError, setStorageError] = useState(false);
-  const selectedRate = mockRates.find(rate => rate.id === metalId) ?? mockRates[0];
+  const [savedRates, setSavedRates] = useState<Partial<Record<Currency, SpotRate[]>>>({});
+  const selectedRate = rates.find(rate => rate.id === metalId) ?? rates[0] ?? mockRates[0];
+
+  useEffect(() => {
+    let active = true;
+    const otherCurrencies = [...new Set(alerts.map(alert => alert.currency ?? 'AED'))]
+      .filter(code => code !== currency) as Currency[];
+    for (const code of otherCurrencies) {
+      fetchPrices(code)
+        .then(response => { if (active) setSavedRates(current => ({ ...current, [code]: mapPriceRates(response.data) })); })
+        .catch(() => { if (active) setSavedRates(current => ({ ...current, [code]: undefined })); });
+    }
+    return () => { active = false; };
+  }, [alerts, currency]);
 
   useEffect(() => {
     let active = true;
@@ -57,7 +76,7 @@ export function PriceAlerts() {
   }, [alerts, loaded]);
 
   const addAlert = () => {
-    if (!loaded) return;
+    if (!loaded || rates.length === 0) return;
     const normalized = normalizeNumericInput(targetText).trim().replace(',', '.');
     const targetPrice = Number(normalized);
     if (!/^\d+(\.\d*)?$/.test(normalized) || !Number.isFinite(targetPrice) || targetPrice <= 0) {
@@ -68,8 +87,9 @@ export function PriceAlerts() {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       metalId,
       targetPrice,
+      currency,
     }]);
-    setTargetText('');
+    setTargetInput({ currency, value: '' });
     setError('');
   };
 
@@ -92,7 +112,7 @@ export function PriceAlerts() {
             <Text style={styles.chevron}>{selectorOpen ? '⌃' : '⌄'}</Text>
           </Pressable>
           {selectorOpen && <View style={styles.options}>
-            {mockRates.map(rate => (
+            {(rates.length ? rates : mockRates).map(rate => (
               <Pressable
                 key={rate.id}
                 style={[styles.option, metalId === rate.id && styles.selectedOption]}
@@ -107,21 +127,21 @@ export function PriceAlerts() {
         </View>
 
         <View>
-          <Text style={styles.fieldLabel}>TARGET ASK PRICE (AED / GRAM)</Text>
+          <Text style={styles.fieldLabel}>{locale.t('TARGET ASK PRICE')} ({currency} / {locale.t('GRAM')})</Text>
           <TextInput
             value={targetText}
-            onChangeText={text => { setTargetText(text); if (error) setError(''); }}
+            onChangeText={text => { setTargetInput({ currency, value: text }); if (error) setError(''); }}
             keyboardType="decimal-pad"
             placeholder={locale.t('Enter target price')}
             placeholderTextColor={colors.textFaint}
             style={[styles.input, !!error && styles.inputError]}
-            accessibilityLabel={locale.isRTL ? 'سعر البيع المستهدف بالدرهم لكل غرام' : 'Target ask price in AED per gram'}
+            accessibilityLabel={locale.isRTL ? `سعر البيع المستهدف بعملة ${currency} لكل غرام` : `Target ask price in ${currency} per gram`}
           />
           {!!error && <Text style={styles.error} accessibilityRole="alert">{error}</Text>}
-          <Text style={styles.currentRate}>CURRENT MOCK ASK  {locale.number(selectedRate.ask)} AED / GRAM</Text>
+          <Text style={styles.currentRate}>CURRENT MOCK ASK  {rates.length ? locale.money(selectedRate.ask, currency) : 'Price unavailable'} / GRAM</Text>
         </View>
 
-        <Pressable style={[styles.addButton, !loaded && styles.addButtonDisabled]} onPress={addAlert} disabled={!loaded} accessibilityRole="button">
+        <Pressable style={[styles.addButton, (!loaded || !rates.length) && styles.addButtonDisabled]} onPress={addAlert} disabled={!loaded || !rates.length} accessibilityRole="button">
           <Text style={styles.addButtonText}>SET ALERT</Text>
         </Pressable>
 
@@ -130,19 +150,20 @@ export function PriceAlerts() {
           {!loaded && <Text style={styles.emptyText}>Loading saved alerts…</Text>}
           {loaded && alerts.length === 0 && <Text style={styles.emptyText}>No price alerts set yet.</Text>}
           {alerts.map(alert => {
-            const rate = mockRates.find(item => item.id === alert.metalId);
-            if (!rate) return null;
-            const reached = Number(rate.ask) <= alert.targetPrice;
+            const alertCurrency = alert.currency ?? 'AED';
+            const rate = (alertCurrency === currency ? rates : savedRates[alertCurrency])?.find(item => item.id === alert.metalId);
+            const title = mockRates.find(item => item.id === alert.metalId)?.title ?? alert.metalId;
+            const reached = rate ? Number(rate.ask) <= alert.targetPrice : false;
             return <View key={alert.id} style={styles.alertRow}>
               <View style={styles.alertCopy}>
-                <Text style={styles.alertMetal}>{rate.title} <Text style={styles.targetText}>≤ {locale.number(alert.targetPrice)} AED</Text></Text>
-                <Text style={styles.alertCurrent}>Current mock ASK {locale.number(rate.ask)} AED</Text>
-                <Text style={[styles.status, reached ? styles.reached : styles.waiting]}>{reached ? 'TARGET REACHED' : 'WAITING FOR TARGET'}</Text>
+                <Text style={styles.alertMetal}>{title} <Text style={styles.targetText}>≤ {locale.money(alert.targetPrice, alertCurrency)}</Text></Text>
+                <Text style={styles.alertCurrent}>{rate ? `Current mock ASK ${locale.money(rate.ask, alertCurrency)}` : 'Price unavailable'}</Text>
+                {rate && <Text style={[styles.status, reached ? styles.reached : styles.waiting]}>{reached ? 'TARGET REACHED' : 'WAITING FOR TARGET'}</Text>}
               </View>
               <Pressable
                 onPress={() => setAlerts(current => current.filter(item => item.id !== alert.id))}
                 accessibilityRole="button"
-                accessibilityLabel={locale.isRTL ? `حذف تنبيه ${locale.t(rate.title)} عند ${locale.number(alert.targetPrice)} د.إ` : `Remove ${rate.title} alert at ${alert.targetPrice.toFixed(2)} AED`}
+                accessibilityLabel={locale.isRTL ? `حذف تنبيه ${locale.t(title)} عند ${locale.money(alert.targetPrice, alertCurrency)}` : `Remove ${title} alert at ${locale.money(alert.targetPrice, alertCurrency)}`}
                 style={styles.removeButton}
               >
                 <Text style={styles.removeText}>REMOVE</Text>

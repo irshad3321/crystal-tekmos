@@ -8,7 +8,10 @@ import { rowDirection, useLocale } from '@/hooks/useLocale';
 import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { ChatBubble, TypingIndicator, type ChatMessage } from './ChatBubble';
-import { getMockReply, quickActions, welcomeMessage } from './mockReplies';
+import { quickActions, welcomeMessage } from './chatContent';
+import { askGoldyy, checkBackendConnection, getGoldyyErrorMessage } from '@/api/ai';
+import { ApiError } from '@/api/client';
+import { useCurrency } from '@/hooks/useCurrency';
 
 function initialMessages(): ChatMessage[] {
   return [{ id: 'welcome', role: 'assistant', text: welcomeMessage, timestamp: new Date() }];
@@ -17,28 +20,105 @@ function initialMessages(): ChatMessage[] {
 export function CrystalAIChat() {
   const { colors } = useTheme();
   const locale = useLocale();
+  const { currency } = useCurrency();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [inputError, setInputError] = useState('');
+  const [failedPrompt, setFailedPrompt] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'unavailable'>('checking');
   const scrollRef = useRef<ScrollViewInstance>(null);
   const inputRef = useRef<TextInputInstance>(null);
-  const replyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestController = useRef<AbortController | null>(null);
+  const requestVersion = useRef(0);
+  const pending = useRef(false);
   const nextId = useRef(0);
 
   useEffect(() => () => {
-    if (replyTimer.current) clearTimeout(replyTimer.current);
+    requestVersion.current += 1;
+    requestController.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const checkConnection = async () => {
+      const connected = await checkBackendConnection();
+      if (active) setConnectionStatus(connected ? 'connected' : 'unavailable');
+    };
+    void checkConnection();
+    const interval = setInterval(() => { void checkConnection(); }, 30000);
+    return () => { active = false; clearInterval(interval); };
   }, []);
 
   const clearConversation = () => {
-    if (replyTimer.current) clearTimeout(replyTimer.current);
-    replyTimer.current = null;
+    requestVersion.current += 1;
+    requestController.current?.abort();
+    requestController.current = null;
+    pending.current = false;
     setMessages(initialMessages());
     setInput('');
     setTyping(false);
     setInputError('');
+    setFailedPrompt(null);
     inputRef.current?.blur();
+  };
+
+  const sendPrompt = async (prompt: string, retry = false) => {
+    if (pending.current) return;
+    pending.current = true;
+    const version = ++requestVersion.current;
+    const controller = new AbortController();
+    requestController.current = controller;
+    setInputError('');
+    setFailedPrompt(null);
+    if (!retry) {
+      setInput('');
+      inputRef.current?.blur();
+      setMessages(current => [...current, {
+        id: `user-${++nextId.current}`,
+        role: 'user',
+        text: prompt,
+        timestamp: new Date(),
+      }]);
+    }
+    setTyping(true);
+
+    try {
+      const previousMessages = retry ? messages.slice(0, -1) : messages;
+      const history = previousMessages.filter(message => message.id !== 'welcome')
+        .slice(-8)
+        .map(message => ({ role: message.role, text: message.text }));
+      const reply = await askGoldyy(prompt, history, controller.signal, currency);
+      if (version !== requestVersion.current) return;
+      setConnectionStatus('connected');
+      setMessages(current => [...current, {
+        id: `assistant-${++nextId.current}`,
+        role: 'assistant',
+        text: reply,
+        timestamp: new Date(),
+      }]);
+    } catch (error) {
+      if (version !== requestVersion.current) return;
+      if (error instanceof ApiError && error.kind === 'cancelled') return;
+      if (error instanceof ApiError) {
+        if (error.kind === 'network' || error.kind === 'configuration') setConnectionStatus('unavailable');
+        else if (error.status !== undefined) setConnectionStatus('connected');
+        else if (error.kind === 'timeout') {
+          setConnectionStatus('checking');
+          void checkBackendConnection().then(connected => {
+            if (version === requestVersion.current) setConnectionStatus(connected ? 'connected' : 'unavailable');
+          });
+        }
+      }
+      setFailedPrompt(prompt);
+      setInputError(locale.t(getGoldyyErrorMessage(error)));
+    } finally {
+      if (version !== requestVersion.current) return;
+      setTyping(false);
+      pending.current = false;
+      requestController.current = null;
+    }
   };
 
   const sendMessage = () => {
@@ -47,28 +127,7 @@ export function CrystalAIChat() {
       setInputError(locale.t('Type a message before sending.'));
       return;
     }
-    if (typing) return;
-
-    setInputError('');
-    setInput('');
-    inputRef.current?.blur();
-    setMessages(current => [...current, {
-      id: `user-${++nextId.current}`,
-      role: 'user',
-      text: prompt,
-      timestamp: new Date(),
-    }]);
-    setTyping(true);
-    replyTimer.current = setTimeout(() => {
-      setMessages(current => [...current, {
-        id: `assistant-${++nextId.current}`,
-        role: 'assistant',
-        text: getMockReply(prompt),
-        timestamp: new Date(),
-      }]);
-      setTyping(false);
-      replyTimer.current = null;
-    }, 750);
+    void sendPrompt(prompt);
   };
 
   const goBack = () => {
@@ -92,8 +151,8 @@ export function CrystalAIChat() {
                 <Image source={require('../../assets/images/crystal_icon_gold.png')} style={styles.icon} resizeMode="contain" />
               </View>
               <View style={styles.identityText}>
-                <Text style={styles.title}>Crystal AI</Text>
-                <Text style={styles.subtitle}>Your Personal Bullion Assistant</Text>
+                <Text style={styles.title}>Goldyy</Text>
+                <Text style={styles.subtitle}>Your Personal Gold Assistant</Text>
               </View>
             </View>
             <Pressable style={styles.clearButton} onPress={clearConversation} accessibilityRole="button" accessibilityLabel={locale.isRTL ? 'مسح المحادثة' : 'Clear conversation'}>
@@ -102,9 +161,9 @@ export function CrystalAIChat() {
           </View>
 
           <View style={styles.statusBar}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>DEMO MODE</Text>
-            <Text style={styles.statusDetail}>Local sample replies</Text>
+            <View style={[styles.statusDot, { backgroundColor: connectionStatus === 'connected' ? colors.green : connectionStatus === 'checking' ? colors.gold : colors.red }]} />
+            <Text style={styles.statusText}>AI ASSISTANT</Text>
+            <Text style={styles.statusDetail}>{connectionStatus === 'connected' ? 'Backend connected' : connectionStatus === 'checking' ? 'Checking backend' : 'Backend unavailable'}</Text>
           </View>
 
           <ScrollView
@@ -115,7 +174,7 @@ export function CrystalAIChat() {
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => { if (messages.length > 1 || typing) scrollRef.current?.scrollToEnd({ animated: true }); }}
           >
-            <Text style={styles.conversationLabel}>CRYSTAL AI · CONVERSATION</Text>
+            <Text style={styles.conversationLabel}>GOLDYY · CONVERSATION</Text>
             {messages.map(message => <ChatBubble key={message.id} message={message} />)}
 
             {messages.length === 1 && <View style={styles.suggestions}>
@@ -140,17 +199,18 @@ export function CrystalAIChat() {
 
           <View style={styles.composer}>
             {!!inputError && <Text style={styles.inputError} accessibilityRole="alert">{inputError}</Text>}
+            {!!failedPrompt && <Pressable onPress={() => { void sendPrompt(failedPrompt, true); }} accessibilityRole="button"><Text style={styles.retryText}>Retry message</Text></Pressable>}
             <View style={styles.composerRow}>
               <TextInput
                 ref={inputRef}
                 style={styles.input}
                 value={input}
                 onChangeText={text => { setInput(text); if (inputError) setInputError(''); }}
-                placeholder={locale.t('Ask Crystal AI…')}
+                placeholder={locale.t('Ask Goldyy…')}
                 placeholderTextColor={colors.textFaint}
                 multiline
                 maxLength={1000}
-                accessibilityLabel={locale.isRTL ? 'رسالة إلى كريستال AI' : 'Message Crystal AI'}
+                accessibilityLabel={locale.isRTL ? 'رسالة إلى غولدي' : 'Message Goldyy'}
               />
               <Pressable
                 style={[styles.sendButton, typing && styles.sendDisabled]}
@@ -162,7 +222,7 @@ export function CrystalAIChat() {
                 <Text style={styles.sendIcon}>➤</Text>
               </Pressable>
             </View>
-            <Text style={styles.composerNote}>Frontend demo · No AI connection</Text>
+            <Text style={styles.composerNote}>AI generated replies · Simulated prices</Text>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -206,5 +266,6 @@ const createStyles = (colors: ThemeColors, typefaces: ReturnType<typeof useLocal
   sendDisabled: { opacity: 0.5 },
   sendIcon: { color: colors.onPrimaryButton, fontSize: 19, lineHeight: 23 },
   inputError: { color: colors.red, fontFamily: typefaces.regular, fontSize: 11, marginBottom: 5 },
+  retryText: { color: colors.goldBright, fontFamily: typefaces.semibold, fontSize: 11, marginBottom: 7 },
   composerNote: { color: colors.textFaint, fontFamily: typefaces.regular, fontSize: 9, textAlign: 'center', marginTop: 7 },
 });

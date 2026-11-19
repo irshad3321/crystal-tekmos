@@ -5,7 +5,8 @@ import { Card, SectionTitle } from '@/components/DashboardUI';
 import { rowDirection, useLocale } from '@/hooks/useLocale';
 import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import { mockRates } from '@/constants/mockRates';
+import type { SpotRate } from '@/components/SpotRateCard';
+import type { Currency } from '@/constants/currencies';
 import { normalizeNumericInput } from '@/constants/numberFormat';
 import { calculateBullionTotal, weightUnits, type WeightUnit } from './calculation';
 
@@ -53,18 +54,20 @@ function SelectField<T extends string>({ label, value, options, onChange }: {
 
 const unitOptions = weightUnits.map(unit => ({ value: unit, label: unit === 'TTB' ? 'TTB (Ten Tola Bar)' : unit }));
 
-export function BullionCalculator() {
+export function BullionCalculator({ rates, currency }: { rates: SpotRate[]; currency: Currency }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [weight, setWeight] = useState('10');
   const [unit, setUnit] = useState<WeightUnit>('Gram');
-  const [metalId, setMetalId] = useState(mockRates[0].id);
+  const [metalId, setMetalId] = useState('gold-24k');
   const [includeVat, setIncludeVat] = useState(true);
-  const rate = mockRates.find(item => item.id === metalId) ?? mockRates[0];
-  const metalOptions = mockRates.map(item => ({ value: item.id, label: `${locale.t(item.title)} (${item.purity})` }));
-  const result = calculateBullionTotal(normalizeNumericInput(weight), unit, rate, includeVat);
-  const formattedTotal = result.total === null ? '—' : locale.number(result.total);
+  const rate = rates.find(item => item.id === metalId) ?? rates[0];
+  const metalOptions = rates.map(item => ({ value: item.id, label: `${locale.t(item.title)} (${item.purity})` }));
+  const result = rate ? calculateBullionTotal(normalizeNumericInput(weight), unit, rate, includeVat) : null;
+  const formattedTotal = result?.total == null ? '—' : locale.money(result.total, currency);
+
+  if (!rate) return <View style={styles.section}><SectionTitle title="Bullion Calculator" /><Card><Text style={styles.subtitle}>Prices unavailable for calculation.</Text></Card></View>;
 
   return (
     <View style={styles.section}>
@@ -87,7 +90,7 @@ export function BullionCalculator() {
               keyboardType="decimal-pad"
               placeholder={locale.t('Enter weight')}
               placeholderTextColor={colors.textFaint}
-              style={[styles.input, result.error && styles.inputError]}
+              style={[styles.input, result?.error && styles.inputError]}
               accessibilityLabel={locale.isRTL ? 'وزن السبائك' : 'Bullion weight'}
             />
           </View>
@@ -95,10 +98,10 @@ export function BullionCalculator() {
             <SelectField label="UNIT" value={unit} options={unitOptions} onChange={setUnit} />
           </View>
         </View>
-        {result.error && <Text style={styles.error} accessibilityRole="alert">{result.error}</Text>}
+        {result?.error && <Text style={styles.error} accessibilityRole="alert">{result.error}</Text>}
 
         <SelectField label="METAL / PURITY" value={metalId} options={metalOptions} onChange={setMetalId} />
-        <Text style={styles.rateText}>ASK RATE  {locale.number(rate.ask)} AED / GRAM</Text>
+        <Text style={styles.rateText}>ASK RATE  {locale.money(rate.ask, currency)} / GRAM</Text>
 
         <View style={styles.vatRow}>
           <View style={styles.vatCopy}>
@@ -118,7 +121,7 @@ export function BullionCalculator() {
           <Text style={styles.totalLabel}>ESTIMATED TOTAL COST</Text>
           <View style={styles.totalRow}>
             <Text style={styles.totalValue} adjustsFontSizeToFit numberOfLines={1}>{formattedTotal}</Text>
-            <Text style={styles.currency}>AED</Text>
+            <Text style={styles.currency}>{currency}</Text>
           </View>
           <Text style={styles.totalNote}>Indicative estimate using mock prices. No live market connection.</Text>
         </View>

@@ -1,30 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { LocalizedText as Text } from '@/components/LocalizedText';
 import { Card, SectionTitle, SegmentedControl } from '@/components/DashboardUI';
 import { rowDirection, useLocale } from '@/hooks/useLocale';
 import type { ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
-import type { MetalRate } from '@/constants/mockRates';
-import { getMockHistory, graphPeriods, type GraphPeriod } from './mockHistory';
+import type { SpotRate } from '@/components/SpotRateCard';
+import type { Currency } from '@/constants/currencies';
+import { fetchPriceHistory, type HistoryPoint, type HistoryRange } from '@/api/priceHistory';
+
+const graphPeriods: readonly HistoryRange[] = ['1D', '1W', '1M', '1Y'];
 
 const chartHeight = 194;
 
-function formatPrice(value: number) {
-  return value.toFixed(2);
-}
-
-function Chart({ values, color }: { values: number[]; color: string }) {
+function Chart({ values, color, currency }: { values: number[]; color: string; currency: Currency }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
   const [width, setWidth] = useState(0);
+  const axisWidth = currency === 'INR' ? 90 : 48;
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
   const padding = Math.max((maximum - minimum) * 0.14, maximum * 0.002);
   const axisMin = minimum - padding;
   const axisMax = maximum + padding;
-  const plotWidth = Math.max(width - 48, 0);
+  const plotWidth = Math.max(width - axisWidth, 0);
   const x = (index: number) => 5 + index * (plotWidth - 10) / (values.length - 1);
   const y = (value: number) => 12 + (axisMax - value) / (axisMax - axisMin) * (chartHeight - 24);
   const onLayout = (event: LayoutChangeEvent) => {
@@ -33,11 +33,11 @@ function Chart({ values, color }: { values: number[]; color: string }) {
   };
 
   return (
-    <View style={styles.chart} onLayout={onLayout} accessibilityLabel={`Illustrative chart from ${formatPrice(values[0])} to ${formatPrice(values[values.length - 1])} AED per gram`}>
+    <View style={styles.chart} onLayout={onLayout} accessibilityLabel={`Illustrative chart from ${locale.money(values[0], currency)} to ${locale.money(values[values.length - 1], currency)} per gram`}>
       {[0, 0.5, 1].map(fraction => (
-        <View key={fraction} style={[styles.gridLine, { top: 12 + fraction * (chartHeight - 24) }]} />
+        <View key={fraction} style={[styles.gridLine, { right: axisWidth, top: 12 + fraction * (chartHeight - 24) }]} />
       ))}
-      {width > 48 && values.slice(1).map((value, index) => {
+      {width > axisWidth && values.slice(1).map((value, index) => {
         const x1 = x(index);
         const x2 = x(index + 1);
         const y1 = y(values[index]);
@@ -51,27 +51,54 @@ function Chart({ values, color }: { values: number[]; color: string }) {
           transform: [{ rotate: `${Math.atan2(y2 - y1, x2 - x1)}rad` }],
         }]} />;
       })}
-      {width > 48 && <View style={[styles.endPoint, { left: x(values.length - 1) - 4, top: y(values[values.length - 1]) - 4, backgroundColor: color }]} />}
-      <View style={styles.axisLabels}>
-        <Text style={styles.axisText}>{locale.number(axisMax)}</Text>
-        <Text style={styles.axisText}>{locale.number((axisMax + axisMin) / 2)}</Text>
-        <Text style={styles.axisText}>{locale.number(axisMin)}</Text>
+      {width > axisWidth && <View style={[styles.endPoint, { left: x(values.length - 1) - 4, top: y(values[values.length - 1]) - 4, backgroundColor: color }]} />}
+      <View style={[styles.axisLabels, { width: axisWidth }]}>
+        <Text style={styles.axisText}>{locale.money(axisMax, currency)}</Text>
+        <Text style={styles.axisText}>{locale.money((axisMax + axisMin) / 2, currency)}</Text>
+        <Text style={styles.axisText}>{locale.money(axisMin, currency)}</Text>
       </View>
     </View>
   );
 }
 
-export function PriceGraph({ rate }: { rate: MetalRate }) {
+export function PriceGraph({ rate, currency }: { rate?: SpotRate; currency: Currency }) {
   const { colors } = useTheme();
   const locale = useLocale();
   const styles = createStyles(colors, locale.typefaces, locale.isRTL);
-  const [period, setPeriod] = useState<GraphPeriod>('1D');
-  const values = getMockHistory(rate, period);
-  const dayValues = getMockHistory(rate, '1D');
-  const dayChange = Number(rate.ask) - dayValues[0];
-  const dayChangePercent = dayChange / dayValues[0] * 100;
-  const volatility = (Number(rate.high) - Number(rate.low)) / Number(rate.ask) * 100;
-  const color = rate.metal === 'silver' ? colors.silverChart : colors.goldBright;
+  const [period, setPeriod] = useState<HistoryRange>('1D');
+  const [history, setHistory] = useState<HistoryPoint[] | null>(null);
+  const [dayHistory, setDayHistory] = useState<HistoryPoint[] | null>(null);
+  const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
+  const metal = rate?.metal;
+  const purity = rate ? Number(rate.purity) : undefined;
+
+  useEffect(() => {
+    if (!metal || purity === undefined) return;
+    let active = true;
+    const request = fetchPriceHistory(metal, purity, currency, period);
+    const dayRequest = period === '1D' ? request : fetchPriceHistory(metal, purity, currency, '1D');
+    Promise.all([request, dayRequest])
+      .then(([rangeData, dayData]) => {
+        if (active) { setHistory(rangeData); setDayHistory(dayData); setError(''); }
+      })
+      .catch(cause => {
+        if (active) { setHistory(null); setDayHistory(null); setError(cause instanceof Error ? cause.message : 'Unable to load price history.'); }
+      });
+    return () => { active = false; };
+  }, [metal, purity, currency, period, retryCount]);
+
+  const values = history?.map(point => point.price);
+  const dayValues = dayHistory?.map(point => point.price);
+  const current = Number(rate?.ask);
+  const dayChange = dayValues ? current - dayValues[0] : 0;
+  const dayChangePercent = dayValues ? dayChange / dayValues[0] * 100 : 0;
+  const low = dayValues ? Math.min(...dayValues) : 0;
+  const high = dayValues ? Math.max(...dayValues) : 0;
+  const volatility = dayValues ? (high - low) / current * 100 : 0;
+  const color = rate?.metal === 'silver' ? colors.silverChart : colors.goldBright;
+
+  if (!rate) return <View style={styles.section}><SectionTitle title="Spot Price Analytics" /><Card><Text style={styles.note}>Prices unavailable for history.</Text></Card></View>;
 
   return (
     <View style={styles.section}>
@@ -80,28 +107,31 @@ export function PriceGraph({ rate }: { rate: MetalRate }) {
         <View style={styles.heading}>
           <View style={styles.headingCopy}>
             <Text style={styles.title}>{rate.title} PRICE GRAPH</Text>
-            <Text style={styles.subtitle}>Indicative movement · AED per gram</Text>
+            <Text style={styles.subtitle}>Indicative movement · {currency} per gram</Text>
           </View>
           <View style={styles.mockBadge}><Text style={styles.mockBadgeText}>MOCK HISTORY</Text></View>
         </View>
-        <SegmentedControl items={graphPeriods} value={period} onChange={setPeriod} />
-        <Chart values={values} color={color} />
+        <SegmentedControl items={graphPeriods} value={period} onChange={next => { setHistory(null); setDayHistory(null); setError(''); setPeriod(next); }} />
+        {error ? <Text style={styles.note}>{error} <Text onPress={() => { setError(''); setRetryCount(count => count + 1); }}>RETRY</Text></Text>
+          : values && dayValues ? <Chart values={values} color={color} currency={currency} />
+            : <Text style={styles.note}>Loading simulated history…</Text>}
+        {values && dayValues && <>
         <View style={styles.chartFooter}>
           <Text style={styles.chartFooterText}>PAST {period}</Text>
-          <Text style={styles.chartFooterText}>CURRENT {locale.number(rate.ask)} AED</Text>
+          <Text style={styles.chartFooterText}>CURRENT {locale.money(current, currency)}</Text>
         </View>
         <View style={styles.stats}>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>24H CHANGE</Text>
             <Text style={[styles.statValue, { color: dayChange >= 0 ? colors.green : colors.red }]}>
-              {locale.number(dayChange, 2, true)} ({locale.percent(dayChangePercent, true)})
+              {dayChange > 0 ? '+' : ''}{locale.money(dayChange, currency)} ({locale.percent(dayChangePercent, true)})
             </Text>
           </View>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>24H RANGE</Text>
             <View style={styles.rangeValues}>
-              <Text style={styles.statValue}>LOW {locale.number(rate.low)}</Text>
-              <Text style={styles.statValue}>HIGH {locale.number(rate.high)}</Text>
+              <Text style={styles.statValue}>LOW {locale.money(low, currency)}</Text>
+              <Text style={styles.statValue}>HIGH {locale.money(high, currency)}</Text>
             </View>
           </View>
           <View style={styles.statRow}>
@@ -109,6 +139,7 @@ export function PriceGraph({ rate }: { rate: MetalRate }) {
             <Text style={styles.statValue}>{locale.percent(volatility)} {locale.t('of current rate')}</Text>
           </View>
         </View>
+        </>}
         <Text style={styles.note}>Illustrative historical data and statistics. No live market connection.</Text>
       </Card>
     </View>
@@ -125,7 +156,7 @@ const createStyles = (colors: ThemeColors, typefaces: ReturnType<typeof useLocal
   mockBadge: { borderColor: colors.border, borderWidth: 1, borderRadius: 12, paddingVertical: 4, paddingHorizontal: 7 },
   mockBadgeText: { color: colors.gold, fontFamily: typefaces.bold, fontSize: 8, letterSpacing: 0.5 },
   chart: { width: '100%', height: chartHeight, position: 'relative', overflow: 'hidden' },
-  gridLine: { position: 'absolute', left: 0, right: 48, height: 1, backgroundColor: colors.border },
+  gridLine: { position: 'absolute', left: 0, height: 1, backgroundColor: colors.border },
   line: { position: 'absolute', height: 2, borderRadius: 2 },
   endPoint: { position: 'absolute', width: 8, height: 8, borderRadius: 4 },
   axisLabels: { position: 'absolute', top: 4, bottom: 4, right: 0, justifyContent: 'space-between', alignItems: 'flex-end' },
