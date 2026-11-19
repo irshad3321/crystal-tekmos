@@ -1,106 +1,41 @@
-﻿# Crystal Bullion
+# Crystal Bullion
 
-Crystal Bullion helps a customer answer a practical question: how much would this weight and purity of metal cost in my currency? It recreates the pricing workflow of the Crystal website using React Native components for Android, iPhone and Expo Web.
+Crystal Bullion is a React Native mobile adaptation of the [Crystal bullion website](https://crystal.tekmostechnology.com/). A customer can compare gold and silver quotes, estimate a purchase by weight and purity, save a price alert, ask Goldyy a question, or prepare a wholesale enquiry in WhatsApp.
 
-## Pages and features
+## Frontend and backend
 
-| Page | What the customer can do |
+The Expo app uses TypeScript, React Native components and Expo Router. Its Market, Calculator, Wholesale and Alerts tabs share the selected currency and latest quotes. A shared fetch client calls the Express backend over HTTPS. Switching between grams and troy ounces uses the downloaded quote immediately. The app keeps the last successful prices if a refresh fails.
+
+The backend runs Node.js with JavaScript ES modules. Routes select a controller, controllers handle HTTP, and services implement pricing, history, alerts and AI. The deployed API runs in Docker on EC2 behind Nginx. GoldAPI.dev supplies spot references, Groq handles conversational requests, and Mongoose persists backend alerts in MongoDB. Mobile alerts and preferences currently use AsyncStorage on the device.
+
+## Price calculation and assumptions
+
+1. **Normalize the quote.** The backend reads XAU (gold) and XAG (silver) in USD. It uses a validated per-gram quote when available, or divides the troy-ounce quote by 31.1034768. It then converts the per-gram reference to AED, the internal base currency.
+2. **Apply purity and spread.** For provider-backed gold, the dealer’s selling price (ask) is the 24K reference multiplied by `fineness / 999`. Crystal uses 999 for 24K, 916 for 22K, 875 for 21K and 750 for 18K. Silver 999 uses its own spot reference. The dealer’s buying price (bid) applies the configured demo buy-to-sell ratio for that metal and purity.
+3. **Convert currency and weight.** The price service converts AED to the selected currency (AED, USD, OMR, SAR or INR) using simulated exchange rates and rounds the per-gram price to two decimals. The calculator converts the entered weight to grams: 11.6638 g per tola, 31.1035 g per calculator ounce and 1,000 g per kilogram. The mobile form also supports a ten-tola bar (116.638 g).
+4. **Estimate the purchase.** Multiply grams by the selected ask, then add VAT if enabled. For example, using the configured **demo** 22K ask of AED 454.85/g, four grams cost AED 1,819.40. Optional 5% VAT adds AED 90.97, giving **AED 1,910.37**. The mobile calculator works directly from the displayed quote. The server calculator rounds the base, tax and total separately and accepts a custom VAT percentage.
+
+The backend reuses spot quotes for 90 seconds and labels each row `LIVE_SPOT`, `CACHED_LIVE_SPOT` or `SIMULATED_DEMO`. A failed provider request retains the last valid quote for that metal, or falls back to configured demo prices. Exchange rates and dealer spreads remain simulated. Graph history is generated for illustration and ends at the reference ask. Country estimates exclude local duties, making charges and shop premiums. The VAT toggle is a prototype assumption. A WhatsApp enquiry requires the dealer to confirm the final price.
+
+## Data structures and APIs
+
+| Endpoint | Main data and purpose |
 | --- | --- |
-| Market | Compare dealer ask and bid for four gold purities and silver 999. Select a metal to view its graph. Switch between grams and troy ounces. |
-| Calculator | Enter weight, select metal and unit, and toggle the prototype's 5% VAT assumption. Invalid or zero weights display an error. |
-| Wholesale | Prepare a WhatsApp enquiry for a positive quantity of gold at the selected purity. The estimate requires a live or cached provider quote. The customer reviews the draft and the business confirms availability and price. |
-| Alerts | Save and remove price targets on this device. A target is reached when the available ask is at or below the saved amount. Status updates while the app is open. |
-| Goldyy | Ask questions about metals, purity, calculations and country estimates. The chat supports suggestions, typing feedback, retry and clearing the conversation. |
+| `GET /api/health` | Reports Express reachability. |
+| `GET /api/prices`, `GET /api/prices/:metal` | Accept a currency query. Each row carries metal, purity label, numeric fineness, buy and sell prices, source and quote timestamp. |
+| `GET /api/prices/history` | Accepts metal, fineness (`purity`), currency and range. Returns ordered timestamp/price points with simulated-history metadata. |
+| `POST /api/calculator` | Accepts metal, purity, weight, unit, currency and VAT settings. Returns grams, rate, base amount, VAT and total. |
+| `GET/POST /api/alerts`, `GET/PATCH/DELETE /api/alerts/:id` | MongoDB records contain metal, purity, currency, target, above/below condition, status and timestamps. Conditions are evaluated on requests. |
+| `POST /api/ai/chat` | Accepts a message and optional context; returns a reply. |
 
-The footer switches between the four desk pages. Goldyy opens as a separate screen. English and Arabic, right-to-left layout, light and dark themes, and currency preferences are supported. The app saves preferences and mobile alerts in AsyncStorage.
+## Goldyy AI and security
 
-## Architecture and data flow
+Goldyy uses the price service directly for recognized country-rate and comparison questions, so its figures follow the same rules as the dashboard. For conversational questions, Express sends server-owned instructions, relevant prices and up to eight recent chat messages to Groq Chat Completions. The default model is `openai/gpt-oss-20b`, configurable with `GROQ_MODEL`. This gives users natural-language explanations while keeping quote arithmetic in testable application code.
 
-```text
-Expo Router pages → TypeScript features → mobile/src/api (fetch)
-                                        → Express routes → controllers → services
-                                                                           ├─ GoldAPI.dev: USD spot references
-                                                                           ├─ Groq: conversational answers
-                                                                           └─ Mongoose → MongoDB: backend alerts
-```
+Provider keys and MongoDB credentials stay on the backend. The app receives the public API URL. The backend validates supported inputs, bounds chat history, applies an in-memory chat rate limit and times out provider requests. Model tool calls are disabled. The prototype alert API has no authentication or record ownership; private customer alerts would require both before production use.
 
-React Native and Expo share the interface across platforms. The mobile API client checks HTTP responses and validates price records before displaying them. Express keeps provider keys on the server. Controllers translate HTTP requests into service calls. Services own conversion, history generation, alert evaluation and AI context. The shared desk provider keeps the current prices and currency available across tabs.
+## Run and verify
 
-| Location | Responsibility |
-| --- | --- |
-| mobile/src/app, components, features | Navigation, reusable UI and feature screens |
-| mobile/src/api, hooks, types, constants, utils | Requests, preferences, types, translations and formatting |
-| server/src/routes, controllers, middleware | HTTP contract, validation errors and AI rate limiting |
-| server/src/services, config, models | Provider integration, calculations, database connection and alert schema |
-| server/src/constants, utils, tests | Supported inputs, demo rates, unit conversion and automated tests |
+From `mobile/`, run `npm ci`, set `EXPO_PUBLIC_API_BASE_URL` in `.env` to the backend HTTPS origin, then run `npx expo start`. Open the app in a compatible Expo Go client or press `w` for web. For a self-hosted backend, see the [server setup and deployment guide](server/README.md) and [environment example](server/.env.example).
 
-## How a quote is calculated
-
-1. The backend reads a gold or silver USD spot quote. It uses a validated per-gram value or divides the per-troy-ounce price by 31.1034768.
-2. AED is the internal base. Divide USD per gram by the configured number of USD per AED. For provider-backed gold, multiply by fineness divided by 999. The four fineness values are 999 (24K), 916 (22K), 875 (21K) and 750 (18K). Silver 999 uses the full silver reference.
-3. The resulting selling price is the dealer's **ask**, which a customer uses to estimate a purchase. The dealer's **bid** uses the configured demo buy-to-sell ratio for that metal and purity. When demo fallback applies, each purity has its own configured AED bid and ask.
-4. Multiply AED by the demo currency factor for AED, USD, OMR, SAR or INR. The spot API rounds the final price per gram to two decimals. Per Oz multiplies the displayed per-gram price by 31.1034768. Changing display units requires no price request.
-5. The calculator multiplies grams by the selected ask. One tola is 11.6638 g, one calculator ounce is 31.1035 g and one kilogram is 1,000 g. The mobile calculator also accepts a ten-tola bar (116.638 g). When VAT is enabled, add 5% to the base estimate.
-
-**Worked demo example.** At the configured 22K ask of AED 454.85/g, 10 g costs AED 4,548.50 before VAT. The server calculator returns AED 227.43 VAT and AED 4,775.93 total. The mobile calculator runs immediately using the downloaded ask and formats its final total. The server rounds the base, tax and total separately and also supports a custom VAT percentage.
-
-## What changes when prices refresh?
-
-The active dashboard checks the backend every five seconds. The server shares in-flight provider requests and caches its spot snapshot for 90 seconds. A new app request can therefore return the same rate. A valid fresh quote is labelled LIVE_SPOT. Reuse of the last valid quote is labelled CACHED_LIVE_SPOT. Without an available provider quote, SIMULATED_DEMO identifies configured fallback prices. On a mobile network failure the app keeps any rates already received and offers retry when the first load fails.
-
-Exchange rates and dealer spreads are simulated even when the underlying metal quote is live. The graph generates an illustrative series for 1D, 1W, 1M, 3M or 1Y. Its last point matches the selected per-gram ask and uses the provider timestamp when available. Earlier movements and the reported daily range are simulated. Local retail quotes, duties, making charges and guaranteed execution prices are outside the prototype.
-
-## AI integration and validation
-
-Goldyy sends the question, selected currency and up to eight conversation items to POST /api/ai/chat. Recognized country-rate questions use the price service directly. For example, a 22K India question requests the same INR selling price as the market screen. Comparing Dubai and India uses the same metal, purity and weight with simulated FX. Both estimates share a global spot reference.
-
-For conversational questions the backend sends system instructions and relevant price context to Groq Chat Completions through Node fetch. The default model is openai/gpt-oss-20b, configurable with GROQ_MODEL. This approach keeps model selection independent of the app and gives users natural-language explanations while pricing stays in ordinary code. Chat history stays in the screen session and the recent messages are sent to the provider when needed. The backend validates message length, limits chat requests per IP and disables model tool calls.
-
-AI assistance during development supported code review, implementation and drafting tests. The country-price suite checks replies against the price service, including explicit currency requests and mocked live/cached data. For the video, demonstrate both a numeric question and a conversational question such as “Why does 22K cost less than 24K?”
-
-## API reference
-
-| Method and path | Purpose and mobile use |
-| --- | --- |
-| GET /api/health | Express reachability, also used by the chat status indicator |
-| GET /api/prices?currency=INR | All prices, used by the desk. Each row includes metal, purity, fineness, buyPrice, sellPrice, source and spotUpdatedAt. |
-| GET /api/prices/gold or /api/prices/silver | Prices for one metal, with optional currency |
-| GET /api/prices/history?metal=gold&purity=916&currency=INR&range=1W | Generated graph points with UTC timestamps, prices and source metadata |
-| POST /api/calculator | Validates weight and unit and returns a full monetary breakdown. The mobile form calculates locally. |
-| POST, GET /api/alerts and GET, PATCH, DELETE /api/alerts/:id | Persistent MongoDB alert CRUD. Backend conditions include above and below. Active records are checked on requests. Mobile alerts use separate local storage. |
-| POST /api/ai/chat | Accepts message and optional context. Returns success and reply. |
-
-## Run the project
-
-Use Node 22.18 or compatible, npm, and an Expo Go client compatible with SDK 58. From the repository root, open two terminals.
-
-```powershell
-cd server
-npm install
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-npm start
-```
-
-Use server/.env for GOLD_API_KEY and GROQ_API_KEY when provider access is wanted. PRICE_SOURCE=mock allows startup when MongoDB is unavailable. GOLD_API_KEY separately controls the spot provider. For persistent backend alerts configure MONGO_URI. GET /api/health checks Express reachability only.
-
-```powershell
-cd mobile
-npm ci
-# Set EXPO_PUBLIC_API_BASE_URL in mobile/.env before starting Expo.
-npx expo start --clear
-```
-
-For a physical phone use http://<computer-LAN-IP>:5000 on the same accessible network, or the public HTTPS backend URL. Open /api/health on the phone to confirm the connection. Scan the Expo QR code or press w for web. Only the API base URL belongs in the mobile environment.
-
-## Host the backend, then build Android
-
-1. In Render, create a **Blueprint** from the repository and branch containing render.yaml (or create a free Node web service manually with root server, build command npm install --omit=dev and start command npm start). The blueprint configures the health path and permits a demo without MongoDB. Set provider secrets privately in Render. Keep the public demo disconnected from private alert data because the prototype alert routes have no authentication or record ownership.
-2. Copy the assigned HTTPS service URL. Verify /api/health returns status ok and /api/prices?currency=INR returns price rows. Check a conversational Goldyy question separately if Groq is enabled.
-3. From mobile/, link the app to your Expo account using EAS CLI. Set EXPO_PUBLIC_API_BASE_URL to that verified URL in the EAS **preview** environment. Use the preview profile in eas.json and run `npx eas-cli build --platform android --profile preview`. Confirm the Android application identifier and signing credentials for your account when prompted.
-4. Download the APK from the completed build, install it on Android and check currency switching, navigation, calculator and chat over mobile data. The API URL is included at build time. Changing it requires a fresh build.
-
-## Verification and next improvements
-
-Run `node --test tests/aiCountryPrices.test.js` from server/. Run `npx tsc --noEmit` and `npm run lint` from mobile/. For a device smoke test, switch to INR, compare 22K and silver, change units, validate a zero-weight calculation, save an alert, and reopen the app in Arabic. Check the wholesale draft with a provider-backed estimate.
-
-For a production website, prioritize visible quote timestamps, an itemized price breakdown and independently sourced local dealer quotes. Verified historical data would support real market charts. Account ownership and an opt-in notification service would allow private alerts to follow customers across devices.
+Run `npx tsc --noEmit` and `npm run lint` in `mobile/`. In `server/`, install dependencies with `npm install` and run `node --test tests/aiCountryPrices.test.js` to check country pricing against the price service, including simulated and cached provider cases.
