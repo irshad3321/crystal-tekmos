@@ -6,7 +6,9 @@ Crystal Bullion is a React Native mobile adaptation of the [Crystal bullion webs
 
 The Expo app uses TypeScript, React Native components and Expo Router. Its Market, Calculator, Wholesale and Alerts tabs share the selected currency and latest quotes. A shared fetch client calls the Express backend over HTTPS. Switching between grams and troy ounces uses the downloaded quote immediately. The app keeps the last successful prices if a refresh fails.
 
-The backend runs Node.js with JavaScript ES modules. Routes select a controller, controllers handle HTTP, and services implement pricing, history, alerts and AI. The deployed API runs in Docker on EC2 behind Nginx. GoldAPI.dev supplies spot references, Groq handles conversational requests, and Mongoose persists backend alerts in MongoDB. Mobile alerts and preferences currently use AsyncStorage on the device.
+I used **MVC (Model–View–Controller) with a separate service layer** for the Express backend. React Native screens provide the view. On the server, routes dispatch requests to controllers, which call services and return JSON. Services handle pricing calculations, history, alert conditions and AI requests. For example, when the API receives a new alert, the alert controller passes it to the alert service, which checks its condition and uses the Mongoose `Alert` model to save it in MongoDB.
+
+The Node.js API uses JavaScript ES modules and runs in Docker on EC2 behind Nginx. GoldAPI.dev supplies spot references, and Groq handles conversational requests. The mobile app stores its own alerts and preferences in AsyncStorage.
 
 ## Price calculation and assumptions
 
