@@ -40,12 +40,12 @@ export function SegmentedControl<T extends string>({ items, value, onChange, lab
 }
 
 const createStyles = (colors: ThemeColors, typefaces: ReturnType<typeof useLocale>['typefaces'], isRTL: boolean) => StyleSheet.create({
-  card: { backgroundColor: colors.glassCard, borderColor: colors.border, borderWidth: 1, borderRadius: 16, padding: 16, shadowColor: colors.cardShadow, shadowOpacity: colors.cardShadowOpacity, shadowRadius: 16, elevation: 5 },
-  sectionTitle: { flexDirection: rowDirection(isRTL), alignItems: 'center', flex: 1, marginBottom: 14, gap: 7 },
+  card: { backgroundColor: colors.glassCard, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 18, shadowColor: colors.cardShadow, shadowOpacity: colors.cardShadowOpacity, shadowRadius: 16, elevation: 5 },
+  sectionTitle: { flexDirection: rowDirection(isRTL), alignItems: 'center', flexShrink: 1, marginBottom: 14, gap: 7 },
   sectionSymbol: { color: colors.goldBright, fontSize: 19, lineHeight: 20 },
-  sectionText: { color: colors.gold, fontFamily: typefaces.bold, fontSize: 12, lineHeight: 17, letterSpacing: 1.8, textTransform: 'uppercase', flexShrink: 1 },
+  sectionText: { color: colors.gold, fontFamily: typefaces.bold, fontSize: 21, lineHeight: 28, letterSpacing: 0, flexShrink: 1 },
   segmented: { flexDirection: rowDirection(isRTL), backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 10, padding: 3 },
-  segment: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 7, minHeight: 32, paddingHorizontal: 5 },
+  segment: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 7, minHeight: 44, paddingHorizontal: 5 },
   segmentSelected: { backgroundColor: colors.goldBright },
   segmentText: { color: colors.textSecondary, fontFamily: typefaces.semibold, fontSize: 11 },
   segmentTextSelected: { color: colors.onGold, fontFamily: typefaces.bold },

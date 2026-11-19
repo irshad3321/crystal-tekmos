@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: crystal-bullion-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.18.0
+      - key: PRICE_SOURCE
+        value: mock

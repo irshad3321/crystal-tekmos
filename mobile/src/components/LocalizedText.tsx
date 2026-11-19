@@ -7,7 +7,7 @@ export function LocalizedText({ children, style, translateContent = true, ...pro
   const { isRTL, t, typefaces } = useLocale();
   const flattened = StyleSheet.flatten(style);
   const alignment = flattened?.textAlign;
-  const weight = flattened?.fontFamily === fonts.bold ? '700' : flattened?.fontFamily === fonts.semibold ? '600' : '400';
+  const weight = flattened?.fontWeight ?? (flattened?.fontFamily === fonts.bold ? '700' : flattened?.fontFamily === fonts.semibold || flattened?.fontFamily === 'sans-serif-medium' ? '600' : '500');
   const localized = Children.map(children, child => {
     if (!translateContent || typeof child !== 'string') return child;
     const match = child.match(/^(\s*)(.*?)(\s*)$/s);

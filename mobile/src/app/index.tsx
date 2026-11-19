@@ -1,1 +1,5 @@
-export { default } from '@/features/dashboard/DashboardScreen';
+import { Redirect } from 'expo-router';
+
+export default function Home() {
+  return <Redirect href="/market" />;
+}

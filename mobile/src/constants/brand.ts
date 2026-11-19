@@ -15,7 +15,7 @@ export const brand = {
 };
 
 export const fonts = {
-  regular: 'Outfit',
+  regular: 'OutfitMedium',
   semibold: 'OutfitSemiBold',
   bold: 'OutfitBold',
 };

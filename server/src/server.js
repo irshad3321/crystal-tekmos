@@ -17,7 +17,7 @@ async function startServer() {
     }
 
     const port = process.env.PORT || 5000;
-    const server = app.listen(port, () => {
+    const server = app.listen(port, process.env.HOST || undefined, () => {
       console.log(messages.log.SERVER_RUNNING(port));
     });
 

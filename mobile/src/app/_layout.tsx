@@ -28,7 +28,7 @@ function Navigation() {
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    Outfit: require('../../assets/fonts/Outfit-Regular.ttf'),
+    OutfitMedium: require('../../assets/fonts/Outfit-Medium.ttf'),
     OutfitSemiBold: require('../../assets/fonts/Outfit-SemiBold.ttf'),
     OutfitBold: require('../../assets/fonts/Outfit-Bold.ttf'),
   });

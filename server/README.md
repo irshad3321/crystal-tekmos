@@ -1,36 +1,36 @@
-# Crystal Bullion backend
+﻿# Crystal Bullion backend
 
-This Express backend provides simulated bullion prices, currency conversions, a calculator, price history, persistent price alerts, and the Goldyy chat endpoint. Prices and exchange rates are **demo data**, not live market information. No trading or payments are supported.
+See the [project documentation](../README.md) for architecture, setup, API contracts, formulas, Goldyy, Render deployment and verification. Configuration examples are in [.env.example](.env.example).
 
-## Goldyy
+## Deploy the API on EC2 with Docker
 
-`POST /api/ai/chat` accepts a question and optional limited context. The route and controller call `aiService`, which validates the request, adds relevant simulated prices from the existing price service, and calls [Groq Chat Completions](https://console.groq.com/docs/api-reference). The server keeps the API key private. Chat history remains in the mobile screen session; no AI conversation is stored in MongoDB.
+The deployment runs Express, MongoDB and a Caddy HTTPS proxy on one Ubuntu EC2 instance. MongoDB uses a private Docker network and a named volume. Express connects with a database-scoped account. The APK connects to Caddy on port 443.
 
-The implementation uses Node.js 22's built-in `fetch`, so it needs no additional SDK package. The default model is Groq's production `openai/gpt-oss-20b` model. The model ID names the open-weight model; requests go to Groq, not the OpenAI API. You can select another supported Groq chat model with `GROQ_MODEL`.
+1. Choose an Ubuntu EC2 instance with a stable public IPv4 address. Create a DNS A record for your API hostname pointing to that address. Allow inbound TCP 80 and 443 for Caddy and restrict SSH (22) to your administrator IP. Keep ports 5000 and 27017 closed to the internet.
+2. Install Docker Engine and the Docker Compose plugin on the instance using the [Ubuntu installation guide](https://docs.docker.com/engine/install/ubuntu/). Enable Docker at boot with `sudo systemctl enable --now docker`.
+3. Transfer `src/`, `deploy/`, `package.json`, `Dockerfile`, `.dockerignore`, and `compose.yaml` to one backend directory on the instance. Run the following commands there.
+4. On the first deployment, generate two independent passwords locally on EC2. This command creates a private file and refuses to overwrite an existing one.
 
-## Setup
-
-1. Use Node.js 22 or newer. Run `npm install` in `server/` if dependencies are not installed.
-2. Add the following to the ignored `server/.env` file, preserving existing settings such as `MONGO_URI`:
-
-   ```dotenv
-   AI_PROVIDER=groq
-   GROQ_MODEL=openai/gpt-oss-20b
-   AI_TIMEOUT_MS=25000
-   GROQ_API_KEY=your_private_groq_api_key_here
+   ```sh
+   (umask 077; set -Ce; admin=$(openssl rand -hex 32); app=$(openssl rand -hex 32); printf 'MONGO_ADMIN_PASSWORD=%s\nMONGO_APP_PASSWORD=%s\n' "$admin" "$app" > .env)
    ```
 
-3. Run `npm run dev` or `npm start` from `server/`.
-4. In `mobile/.env`, keep `EXPO_PUBLIC_API_BASE_URL` set to your reachable backend URL, for example `http://<LAN_IP>:5000`. Restart Expo after changing it and run `npx expo start` from `mobile/`.
+   Edit `.env` on EC2 to add `API_DOMAIN` (public hostname only), `GOLD_API_KEY` for provider-backed quotes and `GROQ_API_KEY` for Goldyy. Compose supplies the MongoDB URI. Keep these generated passwords through redeployments. MongoDB initializes its accounts only on an empty volume. Back up the database separately before replacing the instance or its disk.
+5. Validate and start the deployment:
 
-The AI endpoint returns `503` until a valid server-side API key is configured. It does not fall back to preset replies.
+   ```sh
+   sudo docker compose config --quiet
+   sudo docker compose up -d --build
+   sudo docker compose ps
+   ```
 
-## Test
+6. From another device, substitute your actual hostname and verify both endpoints:
 
-With the backend running, send a request from PowerShell:
+   ```sh
+   curl --fail https://api.example.com/api/health
+   curl --fail 'https://api.example.com/api/prices?currency=INR'
+   ```
 
-```powershell
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:5000/api/ai/chat' -ContentType 'application/json' -Body '{"message":"Explain the difference between 24K and 22K gold","context":{}}'
-```
+   Health confirms Express is responding. Inspect the prices' source status to confirm provider availability. Set the Expo build variable `EXPO_PUBLIC_API_BASE_URL` to the verified HTTPS origin before building the APK.
 
-A successful response is `{ "success": true, "reply": "..." }`. Empty or oversized messages return `400`; request limits return `429`; unavailable provider services return a safe error response. Live AI replies require network access, a valid key, and provider availability. AI answers can be mistaken, and application prices supplied to the model are simulated.
+For a subsequent release, update the files and rerun `sudo docker compose up -d --build`. The named Caddy volumes preserve certificate state across container replacements. Caddy needs working public DNS and access to ports 80 and 443 for [automatic HTTPS](https://caddyserver.com/docs/quick-starts/reverse-proxy).
